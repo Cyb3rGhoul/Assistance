@@ -37,65 +37,65 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center px-4">
+    <div className="min-h-screen bg-black flex items-center justify-center px-4 py-8">
       {/* Grid Background */}
       <div className="fixed inset-0 bg-[linear-gradient(to_right,#1a1a1a_1px,transparent_1px),linear-gradient(to_bottom,#1a1a1a_1px,transparent_1px)] bg-[size:4rem_4rem]"></div>
 
-      <div className="relative z-10 bg-zinc-900 border border-zinc-800 p-8 w-full max-w-md">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold tracking-tighter mb-2 font-display">
+      <div className="relative z-10 bg-zinc-900 border border-zinc-800 p-6 sm:p-8 w-full max-w-md">
+        <div className="mb-6 sm:mb-8">
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-tighter mb-2 font-display">
             <span className="text-cyan-400">[</span>
             ARIA
             <span className="text-cyan-400">]</span>
           </h1>
-          <p className="text-gray-500 text-xs tracking-wider">&gt; AUTHENTICATION_REQUIRED</p>
+          <p className="text-gray-500 text-[10px] sm:text-xs tracking-wider">&gt; AUTHENTICATION_REQUIRED</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
           {!isLogin && (
             <div>
-              <label className="text-xs text-gray-500 mb-1 block">&gt; NAME</label>
+              <label className="text-[10px] sm:text-xs text-gray-500 mb-1 block">&gt; NAME</label>
               <input
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 text-gray-300 text-sm focus:outline-none focus:border-cyan-500 font-mono"
+                className="w-full px-3 py-2.5 sm:py-2 bg-zinc-800 border border-zinc-700 text-gray-300 text-sm focus:outline-none focus:border-cyan-500 font-mono"
                 required
               />
             </div>
           )}
 
           <div>
-            <label className="text-xs text-gray-500 mb-1 block">&gt; EMAIL</label>
+            <label className="text-[10px] sm:text-xs text-gray-500 mb-1 block">&gt; EMAIL</label>
             <input
               type="email"
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 text-gray-300 text-sm focus:outline-none focus:border-cyan-500 font-mono"
+              className="w-full px-3 py-2.5 sm:py-2 bg-zinc-800 border border-zinc-700 text-gray-300 text-sm focus:outline-none focus:border-cyan-500 font-mono"
               required
             />
           </div>
 
           <div>
-            <label className="text-xs text-gray-500 mb-1 block">&gt; PASSWORD</label>
+            <label className="text-[10px] sm:text-xs text-gray-500 mb-1 block">&gt; PASSWORD</label>
             <input
               type="password"
               value={formData.password}
               onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 text-gray-300 text-sm focus:outline-none focus:border-cyan-500 font-mono"
+              className="w-full px-3 py-2.5 sm:py-2 bg-zinc-800 border border-zinc-700 text-gray-300 text-sm focus:outline-none focus:border-cyan-500 font-mono"
               required
             />
           </div>
 
           {error && (
-            <p className="text-red-400 text-xs font-mono border border-red-900 bg-red-950/20 p-2">
+            <p className="text-red-400 text-[10px] sm:text-xs font-mono border border-red-900 bg-red-950/20 p-2 break-words">
               ERROR: {error}
             </p>
           )}
 
           <button
             type="submit"
-            className="w-full py-2 bg-cyan-500 hover:bg-cyan-400 text-black font-mono text-sm transition-colors"
+            className="w-full py-3 sm:py-2 bg-cyan-500 hover:bg-cyan-400 active:bg-cyan-600 text-black font-mono text-sm transition-colors"
           >
             [ {isLogin ? 'LOGIN' : 'REGISTER'} ]
           </button>
@@ -103,7 +103,7 @@ export default function Login() {
 
         <button
           onClick={() => setIsLogin(!isLogin)}
-          className="w-full mt-4 text-gray-500 hover:text-cyan-400 text-xs font-mono transition-colors"
+          className="w-full mt-4 text-gray-500 hover:text-cyan-400 text-[10px] sm:text-xs font-mono transition-colors"
         >
           {isLogin ? '&gt; CREATE_ACCOUNT' : '&gt; BACK_TO_LOGIN'}
         </button>
