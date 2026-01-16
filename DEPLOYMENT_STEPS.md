@@ -57,18 +57,24 @@ git push -u origin main
 1. Go to https://vercel.com
 2. Click **"Add New"** → **"Project"**
 3. Import your GitHub repo
-4. Configure:
-   - **Framework Preset:** Next.js
-   - **Root Directory:** `frontend`
+4. **⚠️ CRITICAL: Set Root Directory**
+   - **Before clicking Deploy**, click **"Configure Project"** or **"Settings"**
+   - Find **"Root Directory"** setting
+   - Click **"Edit"** and set it to: `frontend`
+   - Click **"Save"**
+5. Configure (after setting root directory):
+   - **Framework Preset:** Next.js (auto-detected)
    - **Build Command:** `npm run build` (auto)
    - **Output Directory:** `.next` (auto)
-5. Add Environment Variable:
+6. Add Environment Variable:
    ```
    NEXT_PUBLIC_API_URL=https://aria-backend.onrender.com
    ```
    (Use your actual Render backend URL!)
-6. Click **"Deploy"**
-7. **Copy your frontend URL** (e.g., `https://aria-assistant.vercel.app`)
+7. Click **"Deploy"**
+8. **Copy your frontend URL** (e.g., `https://aria-assistant.vercel.app`)
+
+**⚠️ IMPORTANT:** If you get "No Next.js version detected" error, you forgot to set Root Directory to `frontend`! Go to Settings → General → Root Directory and set it to `frontend`.
 
 ### 4️⃣ Update Backend CORS
 
