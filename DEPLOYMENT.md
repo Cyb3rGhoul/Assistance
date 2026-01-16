@@ -95,9 +95,14 @@ Click **"Create Web Service"** and wait for deployment.
 
 **Settings:**
 - **Framework Preset:** Next.js
-- **Root Directory:** `frontend`
+- **Root Directory:** `frontend` ⚠️ **CRITICAL - Must set this!**
+- **Install Command:** `npm install` (auto, but verify it's NOT `cd frontend && npm install`)
 - **Build Command:** `npm run build` (auto-detected)
 - **Output Directory:** `.next` (auto-detected)
+
+**⚠️ Important:** Once Root Directory is set to `frontend`, all commands run from that directory. So:
+- ✅ Install Command: `npm install` (correct)
+- ❌ Install Command: `cd frontend && npm install` (wrong - will fail)
 
 ### 3.3 Add Environment Variables
 
