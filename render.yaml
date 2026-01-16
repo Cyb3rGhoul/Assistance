@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: aria-backend
+    env: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      # Add your environment variables in Render dashboard:
+      # - MONGODB_URI
+      # - JWT_SECRET
+      # - GEMINI_API_KEY
+      # - EMAIL_USER
+      # - EMAIL_PASS
+      # - EMAIL_PROVIDER
+      # - RECIPIENT_EMAIL

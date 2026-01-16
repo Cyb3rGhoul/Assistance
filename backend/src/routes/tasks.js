@@ -1,0 +1,49 @@
+import express from 'express';
+import Task from '../models/Task.js';
+import { authenticateToken } from '../middleware/auth.js';
+
+const router = express.Router();
+router.use(authenticateToken);
+
+router.get('/', async (req, res) => {
+  try {
+    const tasks = await Task.find({ userId: req.user.userId }).sort({ createdAt: -1 });
+    res.json(tasks);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/', async (req, res) => {
+  try {
+    const task = new Task({ ...req.body, userId: req.user.userId });
+    await task.save();
+    res.json(task);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.put('/:id', async (req, res) => {
+  try {
+    const task = await Task.findOneAndUpdate(
+      { _id: req.params.id, userId: req.user.userId },
+      { ...req.body, updatedAt: Date.now() },
+      { new: true }
+    );
+    res.json(task);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.delete('/:id', async (req, res) => {
+  try {
+    await Task.findOneAndDelete({ _id: req.params.id, userId: req.user.userId });
+    res.json({ message: 'Task deleted' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+export default router;
