@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Mic, MicOff, Volume2 } from 'lucide-react';
+import { Mic, MicOff, Volume2, Sparkles } from 'lucide-react';
 import api from '@/lib/api';
 
 export default function VoiceAssistant() {
@@ -58,7 +58,7 @@ export default function VoiceAssistant() {
       setResponse(data.response);
       speak(data.response);
       
-      if (data.action === 'create' || data.action === 'list') {
+      if (data.action === 'create' || data.action === 'list' || data.action === 'update' || data.action === 'complete' || data.action === 'delete') {
         window.dispatchEvent(new Event('taskUpdate'));
       }
     } catch (error) {
@@ -77,49 +77,65 @@ export default function VoiceAssistant() {
   };
 
   return (
-    <div className="bg-white/10 backdrop-blur-lg rounded-3xl p-8 shadow-2xl border border-white/20">
+    <div className="bg-zinc-900 border border-zinc-800 p-6">
       <div className="flex flex-col items-center space-y-6">
+        {/* Header */}
+        <div className="w-full border-b border-zinc-800 pb-3 mb-2">
+          <p className="text-xs text-gray-500 tracking-wider">&gt; VOICE_INTERFACE</p>
+        </div>
+
+        {/* Microphone Button */}
         <div className="relative">
           <button
             onClick={toggleListening}
-            className={`w-32 h-32 rounded-full flex items-center justify-center transition-all duration-300 ${
+            className={`w-24 h-24 border-2 flex items-center justify-center transition-all duration-200 ${
               isListening
-                ? 'bg-red-500 animate-pulse shadow-lg shadow-red-500/50'
-                : 'bg-gradient-to-br from-purple-500 to-pink-500 hover:scale-110 shadow-lg shadow-purple-500/50'
+                ? 'border-red-500 bg-red-500/10 text-red-400'
+                : 'border-cyan-500 bg-cyan-500/5 text-cyan-400 hover:bg-cyan-500/10'
             }`}
           >
             {isListening ? (
-              <MicOff className="w-12 h-12 text-white" />
+              <MicOff className="w-10 h-10" />
             ) : (
-              <Mic className="w-12 h-12 text-white" />
+              <Mic className="w-10 h-10" />
             )}
           </button>
+          
           {isSpeaking && (
-            <div className="absolute -top-2 -right-2">
-              <Volume2 className="w-8 h-8 text-green-400 animate-bounce" />
+            <div className="absolute -top-2 -right-2 bg-green-500 p-1.5">
+              <Volume2 className="w-4 h-4 text-black" />
             </div>
           )}
         </div>
 
-        <div className="w-full space-y-4">
+        {/* Status */}
+        <div className="text-center">
+          <p className="text-sm text-gray-400 font-mono">
+            {isListening ? '[ LISTENING... ]' : '[ READY ]'}
+          </p>
+        </div>
+
+        {/* Transcript & Response */}
+        <div className="w-full space-y-3">
           {transcript && (
-            <div className="bg-blue-500/20 rounded-xl p-4 border border-blue-400/30">
-              <p className="text-sm text-blue-300 mb-1">You said:</p>
-              <p className="text-white">{transcript}</p>
+            <div className="bg-zinc-800/50 border border-zinc-700 p-4">
+              <p className="text-xs text-cyan-400 mb-2">&gt; INPUT:</p>
+              <p className="text-sm text-gray-300">{transcript}</p>
             </div>
           )}
 
           {response && (
-            <div className="bg-purple-500/20 rounded-xl p-4 border border-purple-400/30">
-              <p className="text-sm text-purple-300 mb-1">ARIA:</p>
-              <p className="text-white">{response}</p>
+            <div className="bg-zinc-800/50 border border-zinc-700 p-4">
+              <p className="text-xs text-green-400 mb-2">&gt; OUTPUT:</p>
+              <p className="text-sm text-gray-300">{response}</p>
             </div>
           )}
 
           {!transcript && !response && (
-            <div className="text-center text-gray-400 py-8">
-              <p className="text-lg mb-2">Click the microphone to start</p>
-              <p className="text-sm">Try: "Remind me to buy groceries tomorrow at 5pm"</p>
+            <div className="text-center py-8 border border-dashed border-zinc-800">
+              <p className="text-xs text-gray-600 font-mono">
+                AWAITING_VOICE_INPUT
+              </p>
             </div>
           )}
         </div>

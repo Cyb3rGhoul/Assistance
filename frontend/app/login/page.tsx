@@ -37,60 +37,75 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center px-4">
-      <div className="bg-white/10 backdrop-blur-lg rounded-3xl p-8 shadow-2xl border border-white/20 w-full max-w-md">
-        <h1 className="text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600 text-center mb-2">
-          ARIA
-        </h1>
-        <p className="text-gray-300 text-center mb-8">Your AI Assistant</p>
+    <div className="min-h-screen bg-black flex items-center justify-center px-4">
+      {/* Grid Background */}
+      <div className="fixed inset-0 bg-[linear-gradient(to_right,#1a1a1a_1px,transparent_1px),linear-gradient(to_bottom,#1a1a1a_1px,transparent_1px)] bg-[size:4rem_4rem]"></div>
+
+      <div className="relative z-10 bg-zinc-900 border border-zinc-800 p-8 w-full max-w-md">
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold tracking-tighter mb-2 font-display">
+            <span className="text-cyan-400">[</span>
+            ARIA
+            <span className="text-cyan-400">]</span>
+          </h1>
+          <p className="text-gray-500 text-xs tracking-wider">&gt; AUTHENTICATION_REQUIRED</p>
+        </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {!isLogin && (
-            <input
-              type="text"
-              placeholder="Name"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-400 focus:outline-none focus:border-purple-400"
-              required
-            />
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">&gt; NAME</label>
+              <input
+                type="text"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 text-gray-300 text-sm focus:outline-none focus:border-cyan-500 font-mono"
+                required
+              />
+            </div>
           )}
 
-          <input
-            type="email"
-            placeholder="Email"
-            value={formData.email}
-            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-            className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-400 focus:outline-none focus:border-purple-400"
-            required
-          />
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">&gt; EMAIL</label>
+            <input
+              type="email"
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 text-gray-300 text-sm focus:outline-none focus:border-cyan-500 font-mono"
+              required
+            />
+          </div>
 
-          <input
-            type="password"
-            placeholder="Password"
-            value={formData.password}
-            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-            className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-400 focus:outline-none focus:border-purple-400"
-            required
-          />
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">&gt; PASSWORD</label>
+            <input
+              type="password"
+              value={formData.password}
+              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+              className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 text-gray-300 text-sm focus:outline-none focus:border-cyan-500 font-mono"
+              required
+            />
+          </div>
 
           {error && (
-            <p className="text-red-400 text-sm text-center">{error}</p>
+            <p className="text-red-400 text-xs font-mono border border-red-900 bg-red-950/20 p-2">
+              ERROR: {error}
+            </p>
           )}
 
           <button
             type="submit"
-            className="w-full py-3 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold hover:scale-105 transition-transform"
+            className="w-full py-2 bg-cyan-500 hover:bg-cyan-400 text-black font-mono text-sm transition-colors"
           >
-            {isLogin ? 'Login' : 'Register'}
+            [ {isLogin ? 'LOGIN' : 'REGISTER'} ]
           </button>
         </form>
 
         <button
           onClick={() => setIsLogin(!isLogin)}
-          className="w-full mt-4 text-gray-300 hover:text-white text-sm"
+          className="w-full mt-4 text-gray-500 hover:text-cyan-400 text-xs font-mono transition-colors"
         >
-          {isLogin ? "Don't have an account? Register" : 'Already have an account? Login'}
+          {isLogin ? '&gt; CREATE_ACCOUNT' : '&gt; BACK_TO_LOGIN'}
         </button>
       </div>
     </div>

@@ -66,42 +66,48 @@ export default function TaskList() {
   };
 
   return (
-    <div className="bg-white/10 backdrop-blur-lg rounded-3xl p-8 shadow-2xl border border-white/20">
-      <h2 className="text-3xl font-bold text-white mb-6">Your Tasks</h2>
+    <div className="bg-zinc-900 border border-zinc-800 p-6">
+      {/* Header */}
+      <div className="border-b border-zinc-800 pb-3 mb-6">
+        <p className="text-xs text-gray-500 tracking-wider">&gt; TASK_MANAGER</p>
+        <p className="text-sm text-gray-400 mt-1">TOTAL: {tasks.length}</p>
+      </div>
       
-      <div className="space-y-3 max-h-[600px] overflow-y-auto">
+      <div className="space-y-2 max-h-[600px] overflow-y-auto pr-2">
         {tasks.length === 0 ? (
-          <p className="text-gray-400 text-center py-8">No tasks yet. Use voice commands to add some!</p>
+          <div className="text-center py-12 border border-dashed border-zinc-800">
+            <p className="text-xs text-gray-600 font-mono">NO_TASKS_FOUND</p>
+          </div>
         ) : (
           tasks.map((task) => (
             <div
               key={task._id}
-              className={`bg-white/5 rounded-xl p-4 border border-white/10 hover:bg-white/10 transition-all ${
-                task.completed ? 'opacity-60' : ''
+              className={`bg-zinc-800/50 border border-zinc-700 p-4 hover:border-cyan-900 transition-all ${
+                task.completed ? 'opacity-50' : ''
               }`}
             >
               <div className="flex items-start gap-3">
                 <button
                   onClick={() => toggleComplete(task._id, task.completed)}
-                  className="mt-1 flex-shrink-0"
+                  className="mt-0.5 flex-shrink-0"
                 >
                   {task.completed ? (
-                    <CheckCircle2 className="w-6 h-6 text-green-400" />
+                    <CheckCircle2 className="w-5 h-5 text-green-500" />
                   ) : (
-                    <Circle className="w-6 h-6 text-gray-400 hover:text-purple-400" />
+                    <Circle className="w-5 h-5 text-gray-600 hover:text-cyan-500" />
                   )}
                 </button>
 
-                <div className="flex-1">
-                  <h3 className={`text-white font-medium ${task.completed ? 'line-through' : ''}`}>
+                <div className="flex-1 min-w-0">
+                  <h3 className={`text-gray-200 text-sm font-mono ${task.completed ? 'line-through' : ''}`}>
                     {task.title}
                   </h3>
                   {task.description && (
-                    <p className="text-gray-400 text-sm mt-1">{task.description}</p>
+                    <p className="text-gray-500 text-xs mt-1 font-mono">{task.description}</p>
                   )}
                   {task.reminderTime && (
-                    <div className="flex items-center gap-1 text-purple-300 text-sm mt-2">
-                      <Clock className="w-4 h-4" />
+                    <div className="flex items-center gap-1 text-cyan-400 text-xs mt-2 font-mono">
+                      <Clock className="w-3 h-3" />
                       <span>{new Date(task.reminderTime).toLocaleString()}</span>
                     </div>
                   )}
@@ -109,9 +115,9 @@ export default function TaskList() {
 
                 <button
                   onClick={() => deleteTask(task._id)}
-                  className="text-red-400 hover:text-red-300 flex-shrink-0"
+                  className="text-red-500 hover:text-red-400 flex-shrink-0"
                 >
-                  <Trash2 className="w-5 h-5" />
+                  <Trash2 className="w-4 h-4" />
                 </button>
               </div>
             </div>

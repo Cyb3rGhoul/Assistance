@@ -1,97 +1,8 @@
 import express from 'express';
 import { GoogleGenAI } from '@google/genai';
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import Task from '../models/Task.js';
-import User from '../models/User.js';
 import { authenticateToken } from '../middleware/auth.js';
-
-// Email transporter - created lazily to ensure env vars are loaded
-function getEmailTransporter() {
-  const emailUser = process.env.EMAIL_USER?.trim();
-  const emailPass = process.env.EMAIL_PASS?.trim();
-  const emailProvider = process.env.EMAIL_PROVIDER?.trim().toLowerCase() || 'auto';
-  
-  if (!emailUser || !emailPass) {
-    throw new Error('Email configuration missing. Please set EMAIL_USER and EMAIL_PASS in .env file');
-  }
-  
-  // Auto-detect provider from email address if not specified
-  let host, port, secure, fromEmail;
-  const isGmail = emailUser.includes('@gmail.com');
-  const isOutlook = emailUser.includes('@outlook.com') || emailUser.includes('@hotmail.com') || emailUser.includes('@live.com');
-  
-  if (emailProvider === 'brevo' || emailProvider === 'sendinblue') {
-    // Brevo (Sendinblue) SMTP - FREE: 300 emails/day, 9,000/month
-    // Get credentials from: https://app.brevo.com/settings/keys/api
-    host = 'smtp-relay.brevo.com';
-    port = 587;
-    secure = false;
-    fromEmail = emailUser; // Use your verified sender email
-  } else if (emailProvider === 'sendpulse') {
-    // SendPulse SMTP - FREE: 12,000 emails/month
-    // Get credentials from: https://sendpulse.com/settings/smtp
-    host = 'smtp.sendpulse.com';
-    port = 587;
-    secure = false;
-    fromEmail = emailUser;
-  } else if (emailProvider === 'smtp2go') {
-    // SMTP2GO - FREE: 1,000 emails/month
-    // Get credentials from: https://www.smtp2go.com/settings/users/
-    host = 'mail.smtp2go.com';
-    port = 587;
-    secure = false;
-    fromEmail = emailUser;
-  } else if (emailProvider === 'mailgun') {
-    // Mailgun - FREE: 100 emails/day (first 3 months)
-    // Get credentials from: https://app.mailgun.com/app/sending/domains
-    host = 'smtp.mailgun.org';
-    port = 587;
-    secure = false;
-    fromEmail = emailUser;
-  } else if (emailProvider === 'gmail' || (emailProvider === 'auto' && isGmail)) {
-    // Gmail SMTP configuration (recommended - still supports app passwords)
-    host = 'smtp.gmail.com';
-    port = 587;
-    secure = false;
-    fromEmail = emailUser;
-  } else if (emailProvider === 'outlook' || (emailProvider === 'auto' && isOutlook)) {
-    // Outlook SMTP - Note: Microsoft has disabled basic auth for many accounts
-    host = 'smtp-mail.outlook.com';
-    port = 587;
-    secure = false;
-    fromEmail = emailUser;
-  } else {
-    // Default to Gmail
-    host = 'smtp.gmail.com';
-    port = 587;
-    secure = false;
-    fromEmail = emailUser;
-  }
-  
-  const config = {
-    host: host,
-    port: port,
-    secure: secure,
-    auth: {
-      user: emailUser,
-      pass: emailPass
-    }
-  };
-  
-  // Add TLS options for better compatibility
-  if (emailProvider === 'brevo' || emailProvider === 'sendinblue' || emailProvider === 'sendpulse' || emailProvider === 'smtp2go' || emailProvider === 'mailgun') {
-    config.requireTLS = true;
-  } else if (isGmail) {
-    config.requireTLS = true;
-  } else if (isOutlook) {
-    config.requireTLS = true;
-    config.tls = {
-      ciphers: 'SSLv3'
-    };
-  }
-  
-  return { transporter: nodemailer.createTransport(config), fromEmail: fromEmail || emailUser };
-}
 
 const router = express.Router();
 router.use(authenticateToken);
@@ -102,24 +13,18 @@ router.post('/process', async (req, res) => {
     
     console.log('Processing command:', command);
     
-    // Validate API key
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey || apiKey.trim() === '') {
       throw new Error('GEMINI_API_KEY is not set or is empty');
     }
     
     console.log('API Key exists:', !!apiKey);
-    console.log('API Key length:', apiKey.length);
-    console.log('API Key starts with AIza:', apiKey.startsWith('AIza'));
     
-    // Initialize AI client with validated API key
-    // Explicitly set vertexai to false to prevent default credentials lookup
     const ai = new GoogleGenAI({
       apiKey: apiKey.trim(),
       vertexai: false
     });
 
-    // First, get all user tasks to help AI identify tasks by title
     const allTasks = await Task.find({ userId: req.user.userId });
     const tasksList = allTasks.map(t => ({
       id: t._id.toString(),
@@ -133,6 +38,8 @@ router.post('/process', async (req, res) => {
     const prompt = `You are ARIA, a voice assistant. Parse this command and return ONLY a JSON object (no markdown, no extra text):
 Command: "${command}"
 
+Current date and time: ${new Date().toISOString()}
+
 Available tasks:
 ${JSON.stringify(tasksList, null, 2)}
 
@@ -140,44 +47,35 @@ Return format:
 {
   "action": "create|list|update|delete|complete|sendEmail",
   "task": {
-    "title": "task title (for matching existing tasks)",
+    "title": "task title",
     "description": "details or null",
-    "dueDate": "ISO date string or null (only if mentioned)",
-    "reminderTime": "ISO date string or null (only if mentioned)"
+    "dueDate": "ISO date string or null",
+    "reminderTime": "ISO date string or null"
   },
-  "taskId": "task id from available tasks if updating/deleting/completing (match by title)",
+  "taskId": "task id from available tasks if updating/deleting/completing",
   "updateFields": {
     "title": "new title or null",
     "description": "new description or null",
     "dueDate": "new ISO date string or null",
     "reminderTime": "new ISO date string or null"
   },
-  "email": {
-    "subject": "email subject or null",
-    "body": "email body/content or null"
-  },
   "response": "natural language response to user"
 }
 
 IMPORTANT RULES:
-- For "update": Only include fields in "updateFields" that the user explicitly mentioned to change
-- For "update": Match the task by title from available tasks and set "taskId"
-- For "delete": Match the task by title from available tasks and set "taskId"
-- For "complete": Match the task by title from available tasks and set "taskId"
-- For "sendEmail": Extract subject and body from the user's command. If user says "send me an email" without details, use a default subject like "Message from ARIA" and ask what they want to send
-- If task title is ambiguous, use the most recent or most relevant task
-- For updates: If user says "update the date", only set "updateFields.dueDate", leave others null
-- For updates: If user says "change the title", only set "updateFields.title", leave others null
+- For "update": Only include fields in "updateFields" that the user explicitly mentioned
+- For "update/delete/complete": Match the task by title from available tasks and set "taskId"
+- For "sendEmail": Use when user asks to send/email task list (e.g., "send my tasks to email", "email me my tasks")
+- Parse dates naturally: "today 6pm" = today at 18:00, "tomorrow 5pm" = tomorrow at 17:00
+- Always return full ISO date format for dates
 
 Examples:
 - "remind me to buy groceries tomorrow at 5pm" → action: create
 - "what are my tasks today" → action: list
 - "mark buy groceries as complete" → action: complete, taskId: (match from tasks)
 - "delete the grocery task" → action: delete, taskId: (match from tasks)
-- "update the meeting date to tomorrow" → action: update, taskId: (match "meeting"), updateFields: {dueDate: "2024-...", title: null, description: null, reminderTime: null}
-- "change the meeting title to team meeting" → action: update, taskId: (match "meeting"), updateFields: {title: "team meeting", description: null, dueDate: null, reminderTime: null}
-- "send me an email" → action: sendEmail, email: {subject: "Message from ARIA", body: "This is a message sent via voice command from ARIA assistant."}
-- "send me an email about the meeting tomorrow" → action: sendEmail, email: {subject: "Meeting Tomorrow", body: "Reminder: You have a meeting scheduled for tomorrow."}`;
+- "send my tasks to my email" → action: sendEmail
+- "email me all my tasks" → action: sendEmail`;
 
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-lite",
@@ -185,7 +83,6 @@ Examples:
     });
     
     const text = response.text.trim();
-    
     console.log('Gemini response:', text);
     
     const parsed = JSON.parse(text.replace(/```json\n?|\n?```/g, ''));
@@ -213,7 +110,6 @@ Examples:
         let taskToUpdateId = parsed.taskId;
         
         if (!taskToUpdateId && parsed.task?.title) {
-          // Try to find task by title if taskId not provided
           const taskToUpdate = await Task.findOne({ 
             title: { $regex: new RegExp(parsed.task.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') },
             userId: req.user.userId 
@@ -228,7 +124,6 @@ Examples:
           throw new Error('Task ID or title is required for update');
         }
 
-        // Build update object with only specified fields
         const updateData = { updatedAt: new Date() };
         if (parsed.updateFields) {
           if (parsed.updateFields.title !== null && parsed.updateFields.title !== undefined && parsed.updateFields.title !== '') {
@@ -266,7 +161,6 @@ Examples:
         let taskToCompleteId = parsed.taskId;
         
         if (!taskToCompleteId && parsed.task?.title) {
-          // Try to find task by title if taskId not provided
           const taskToComplete = await Task.findOne({ 
             title: { $regex: new RegExp(parsed.task.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') },
             userId: req.user.userId 
@@ -301,7 +195,6 @@ Examples:
         let taskToDeleteId = parsed.taskId;
         
         if (!taskToDeleteId && parsed.task?.title) {
-          // Try to find task by title if taskId not provided
           const taskToDelete = await Task.findOne({ 
             title: { $regex: new RegExp(parsed.task.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') },
             userId: req.user.userId 
@@ -332,73 +225,85 @@ Examples:
         break;
 
       case 'sendEmail':
-        // Get recipient email - use configured email or default to cyber.ghoul019@gmail.com
-        const recipientEmail = process.env.RECIPIENT_EMAIL?.trim() || 'cyber.ghoul019@gmail.com';
+        const resendApiKey = process.env.RESEND_API_KEY;
         
-        // Get user's email from database (for logging purposes)
-        const user = await User.findById(req.user.userId);
-        const userEmail = user?.email || 'Unknown';
-
-        // Validate and get email transporter
-        let emailConfig;
-        try {
-          emailConfig = getEmailTransporter();
-        } catch (configError) {
-          throw new Error(`Email configuration error: ${configError.message}. Please check your .env file has EMAIL_USER and EMAIL_PASS set correctly.`);
+        if (!resendApiKey || resendApiKey.trim() === '') {
+          throw new Error('Email service not configured. Please add RESEND_API_KEY to .env file.');
         }
 
-        // Prepare email content
-        const emailSubject = parsed.email?.subject || 'Message from ARIA';
-        const emailBody = parsed.email?.body || 'This is a message sent via voice command from ARIA assistant.';
+        const resend = new Resend(resendApiKey);
+        const userTasks = await Task.find({ userId: req.user.userId });
+        const pendingTasks = userTasks.filter(t => !t.completed);
+        const completedTasks = userTasks.filter(t => t.completed);
 
-        // Send email
-        try {
-          await emailConfig.transporter.sendMail({
-            from: emailConfig.fromEmail,
-            to: recipientEmail,
-            subject: emailSubject,
-            html: `
-              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #6366f1;">${emailSubject}</h2>
-                <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                  <p style="color: #374151; line-height: 1.6; white-space: pre-wrap;">${emailBody.replace(/\n/g, '<br>')}</p>
+        const emailHtml = `
+          <div style="font-family: 'Roboto Mono', monospace; max-width: 600px; margin: 0 auto; background: #000000; color: #e5e5e5; padding: 40px 20px;">
+            <div style="border: 1px solid #27272a; padding: 32px; background: #18181b;">
+              <h1 style="color: #22d3ee; margin: 0 0 8px 0; font-size: 32px; font-weight: 700;">[ARIA]</h1>
+              <p style="color: #71717a; margin: 0 0 32px 0; font-size: 12px; letter-spacing: 2px;">&gt; TASK_REPORT</p>
+              
+              <div style="margin-bottom: 24px;">
+                <div style="display: inline-block; background: #22d3ee; color: #000; padding: 8px 16px; margin-right: 8px;">
+                  <span style="font-weight: 700; font-size: 24px;">${pendingTasks.length}</span>
+                  <span style="font-size: 12px; margin-left: 4px;">PENDING</span>
                 </div>
-                <p style="color: #9ca3af; font-size: 12px; margin-top: 20px;">
-                  This email was sent via ARIA voice assistant.
-                </p>
+                <div style="display: inline-block; background: #10b981; color: #000; padding: 8px 16px;">
+                  <span style="font-weight: 700; font-size: 24px;">${completedTasks.length}</span>
+                  <span style="font-size: 12px; margin-left: 4px;">COMPLETED</span>
+                </div>
               </div>
-            `,
-            text: emailBody
+              
+              ${pendingTasks.length > 0 ? `
+                <div style="border: 1px solid #27272a; padding: 16px; margin-bottom: 16px; background: #09090b;">
+                  <p style="color: #71717a; margin: 0 0 12px 0; font-size: 10px; letter-spacing: 1px;">&gt; PENDING_TASKS</p>
+                  ${pendingTasks.map(task => `
+                    <div style="border-left: 2px solid #22d3ee; padding: 12px; margin-bottom: 8px; background: #18181b;">
+                      <p style="margin: 0; color: #e5e5e5; font-size: 14px; font-weight: 600;">${task.title}</p>
+                      ${task.description ? `<p style="margin: 4px 0 0 0; color: #71717a; font-size: 12px;">${task.description}</p>` : ''}
+                      ${task.reminderTime ? `<p style="margin: 4px 0 0 0; color: #22d3ee; font-size: 11px;">⏰ ${new Date(task.reminderTime).toLocaleString()}</p>` : ''}
+                    </div>
+                  `).join('')}
+                </div>
+              ` : `
+                <div style="border: 1px dashed #27272a; padding: 20px; text-align: center; margin-bottom: 16px;">
+                  <p style="margin: 0; color: #71717a; font-size: 12px;">NO_PENDING_TASKS</p>
+                </div>
+              `}
+              
+              ${completedTasks.length > 0 ? `
+                <div style="border: 1px solid #27272a; padding: 16px; background: #09090b;">
+                  <p style="color: #71717a; margin: 0 0 12px 0; font-size: 10px; letter-spacing: 1px;">&gt; COMPLETED_TASKS</p>
+                  ${completedTasks.map(task => `
+                    <div style="border-left: 2px solid #10b981; padding: 12px; margin-bottom: 8px; background: #18181b; opacity: 0.6;">
+                      <p style="margin: 0; color: #e5e5e5; font-size: 14px; text-decoration: line-through;">${task.title}</p>
+                    </div>
+                  `).join('')}
+                </div>
+              ` : ''}
+              
+              <p style="color: #71717a; font-size: 10px; margin: 24px 0 0 0; text-align: center; letter-spacing: 1px;">
+                &gt; POWERED_BY: ARIA_ASSISTANT
+              </p>
+            </div>
+          </div>
+        `;
+
+        try {
+          await resend.emails.send({
+            from: 'ARIA Assistant <onboarding@resend.dev>',
+            to: 'cyber.ghoul019@gmail.com',
+            subject: `[ARIA] Task Report - ${pendingTasks.length} Pending, ${completedTasks.length} Completed`,
+            html: emailHtml
           });
 
-          console.log(`✉️ Email sent to: ${recipientEmail} (requested by user: ${userEmail})`);
-
+          console.log('✉️ Task list email sent to: cyber.ghoul019@gmail.com');
           responseData.emailSent = true;
           if (!responseData.response) {
-            responseData.response = `Email sent successfully to ${recipientEmail}`;
+            responseData.response = `Task list sent to your email. You have ${pendingTasks.length} pending and ${completedTasks.length} completed tasks.`;
           }
         } catch (emailError) {
           console.error('Email send error:', emailError);
-          
-          // Provide more helpful error messages
-          if (emailError.code === 'EAUTH') {
-            const isOutlook = emailUser && (emailUser.includes('@outlook.com') || emailUser.includes('@hotmail.com'));
-            
-            if (isOutlook && emailError.response?.includes('basic authentication is disabled')) {
-              throw new Error('Outlook has disabled basic authentication. Recommended: Use Brevo (FREE 300 emails/day). Sign up at https://www.brevo.com, get SMTP credentials from Settings > SMTP & API, then set EMAIL_PROVIDER=brevo in .env. Or use Gmail: https://myaccount.google.com/apppasswords');
-            } else {
-              const provider = process.env.EMAIL_PROVIDER?.toLowerCase() || 'auto';
-              if (provider === 'brevo' || provider === 'sendinblue') {
-                throw new Error('Brevo authentication failed. Get SMTP credentials from https://app.brevo.com/settings/keys/api. Make sure EMAIL_USER is your Brevo SMTP username and EMAIL_PASS is your SMTP password.');
-              } else {
-                throw new Error('Email authentication failed. Please check your EMAIL_USER and EMAIL_PASS in .env file. For free service, try Brevo: https://www.brevo.com (300 emails/day free). For Gmail: https://myaccount.google.com/apppasswords');
-              }
-            }
-          } else if (emailError.code === 'ECONNECTION') {
-            throw new Error('Could not connect to email server. Please check your internet connection and email server settings.');
-          } else {
-            throw new Error(`Failed to send email: ${emailError.message}`);
-          }
+          throw new Error('Failed to send email. Please check RESEND_API_KEY configuration.');
         }
         break;
     }
