@@ -445,7 +445,7 @@ Return format:
                     <div style="border-left: 2px solid #22d3ee; padding: 12px; margin-bottom: 8px; background: #18181b;">
                       <p style="margin: 0; color: #e5e5e5; font-size: 14px; font-weight: 600;">${task.title}</p>
                       ${task.description ? `<p style="margin: 4px 0 0 0; color: #71717a; font-size: 12px;">${task.description}</p>` : ''}
-                      ${task.reminderTime ? `<p style="margin: 4px 0 0 0; color: #22d3ee; font-size: 11px;">⏰ ${new Date(task.reminderTime).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</p>` : ''}
+                      ${task.reminderTime ? `<p style="margin: 4px 0 0 0; color: #22d3ee; font-size: 11px;">⏰ ${new Date(task.reminderTime).toLocaleString('en-US', { timeZone: 'Asia/Kolkata', hour12: true })} IST</p>` : ''}
                     </div>
                   `).join('')}
                 </div>

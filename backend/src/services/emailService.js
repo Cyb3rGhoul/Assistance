@@ -27,13 +27,15 @@ export async function sendTaskReminder(task, userEmail) {
               <div style="background: #fef3c7; padding: 16px; border-radius: 8px; margin-bottom: 16px;">
                 <p style="margin: 0; color: #92400e; font-weight: 600;">
                   📅 Due: ${new Date(task.dueDate).toLocaleString('en-US', { 
+                    timeZone: 'Asia/Kolkata',
                     weekday: 'long', 
                     year: 'numeric', 
                     month: 'long', 
                     day: 'numeric',
                     hour: '2-digit',
-                    minute: '2-digit'
-                  })}
+                    minute: '2-digit',
+                    hour12: true
+                  })} IST
                 </p>
               </div>
             ` : ''}
@@ -80,7 +82,7 @@ export async function sendMorningSummary(userEmail, tasks) {
                   <div style="background: white; padding: 16px; border-radius: 6px; margin-bottom: 12px; border-left: 3px solid #667eea;">
                     <p style="margin: 0; color: #1a202c; font-weight: 600; font-size: 16px;">${task.title}</p>
                     ${task.description ? `<p style="margin: 8px 0 0 0; color: #718096; font-size: 14px;">${task.description}</p>` : ''}
-                    ${task.dueDate ? `<p style="margin: 8px 0 0 0; color: #e53e3e; font-size: 13px;">⏰ ${new Date(task.dueDate).toLocaleString()}</p>` : ''}
+                    ${task.dueDate ? `<p style="margin: 8px 0 0 0; color: #e53e3e; font-size: 13px;">⏰ ${new Date(task.dueDate).toLocaleString('en-US', { timeZone: 'Asia/Kolkata', hour12: true })} IST</p>` : ''}
                   </div>
                 `).join('')}
               </div>
@@ -149,7 +151,7 @@ export async function sendEveningReport(userEmail, completedTasks, pendingTasks)
                 ${pendingTasks.map(task => `
                   <div style="padding: 12px; border-bottom: 1px solid #fed7d7;">
                     <p style="margin: 0; color: #2d3748; font-weight: 600;">${task.title}</p>
-                    ${task.dueDate ? `<p style="margin: 4px 0 0 0; color: #e53e3e; font-size: 13px;">⏰ ${new Date(task.dueDate).toLocaleString()}</p>` : ''}
+                    ${task.dueDate ? `<p style="margin: 4px 0 0 0; color: #e53e3e; font-size: 13px;">⏰ ${new Date(task.dueDate).toLocaleString('en-US', { timeZone: 'Asia/Kolkata', hour12: true })} IST</p>` : ''}
                   </div>
                 `).join('')}
               </div>
