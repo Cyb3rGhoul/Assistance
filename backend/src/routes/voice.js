@@ -12,49 +12,76 @@ router.use(authenticateToken);
 function parseTimeToIST(timeString) {
   if (!timeString) return null;
   
-  const now = new Date();
   const istOffset = 5.5 * 60 * 60 * 1000; // IST is UTC+5:30
   
-  // Convert current time to IST for reference
+  try {
+    // Parse the ISO string from AI
+    const parsedDate = new Date(timeString);
+    
+    if (isNaN(parsedDate.getTime())) {
+      // If direct parsing failed, try manual parsing
+      return parseManualTime(timeString);
+    }
+    
+    // The AI provides ISO strings in UTC, but they represent IST times
+    // So we need to adjust them back to proper UTC for storage
+    // Example: AI says "2024-01-17T14:35:00.000Z" for 2:35 PM IST
+    // But this is actually 2:35 PM UTC, we need to convert it to 9:05 AM UTC (2:35 PM IST)
+    
+    // Get the local time components from the parsed date
+    const year = parsedDate.getUTCFullYear();
+    const month = parsedDate.getUTCMonth();
+    const date = parsedDate.getUTCDate();
+    const hours = parsedDate.getUTCHours();
+    const minutes = parsedDate.getUTCMinutes();
+    const seconds = parsedDate.getUTCSeconds();
+    
+    // Create a new date treating these as IST components
+    const istDate = new Date(year, month, date, hours, minutes, seconds);
+    
+    // Convert IST to UTC for storage
+    return new Date(istDate.getTime() - istOffset);
+    
+  } catch (error) {
+    console.error('Time parsing error:', error);
+    return parseManualTime(timeString);
+  }
+}
+
+// Fallback manual time parsing
+function parseManualTime(timeString) {
+  const now = new Date();
+  const istOffset = 5.5 * 60 * 60 * 1000;
   const nowIST = new Date(now.getTime() + istOffset);
   
-  // Parse the time string and create IST date
-  const parsedDate = new Date(timeString);
+  const lowerTime = timeString.toLowerCase();
+  let targetDate = new Date(nowIST);
   
-  // If parsing failed, try manual parsing for common formats
-  if (isNaN(parsedDate.getTime())) {
-    // Handle formats like "today 6pm", "tomorrow 5:30pm", etc.
-    const lowerTime = timeString.toLowerCase();
-    
-    let targetDate = new Date(nowIST);
-    
-    if (lowerTime.includes('tomorrow')) {
-      targetDate.setDate(targetDate.getDate() + 1);
-    } else if (lowerTime.includes('today')) {
-      // Keep current date
-    } else if (lowerTime.includes('next week')) {
-      targetDate.setDate(targetDate.getDate() + 7);
-    }
-    
-    // Extract time
-    const timeMatch = lowerTime.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/);
-    if (timeMatch) {
-      let hours = parseInt(timeMatch[1]);
-      const minutes = parseInt(timeMatch[2] || '0');
-      const ampm = timeMatch[3];
-      
-      if (ampm === 'pm' && hours !== 12) hours += 12;
-      if (ampm === 'am' && hours === 12) hours = 0;
-      
-      targetDate.setHours(hours, minutes, 0, 0);
-      
-      // Convert back to UTC for storage
-      return new Date(targetDate.getTime() - istOffset);
-    }
+  if (lowerTime.includes('tomorrow')) {
+    targetDate.setDate(targetDate.getDate() + 1);
+  } else if (lowerTime.includes('today')) {
+    // Keep current date
+  } else if (lowerTime.includes('next week')) {
+    targetDate.setDate(targetDate.getDate() + 7);
   }
   
-  // If we have a valid parsed date, convert from IST to UTC
-  return new Date(parsedDate.getTime() - istOffset);
+  // Extract time
+  const timeMatch = lowerTime.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/);
+  if (timeMatch) {
+    let hours = parseInt(timeMatch[1]);
+    const minutes = parseInt(timeMatch[2] || '0');
+    const ampm = timeMatch[3];
+    
+    if (ampm === 'pm' && hours !== 12) hours += 12;
+    if (ampm === 'am' && hours === 12) hours = 0;
+    
+    targetDate.setHours(hours, minutes, 0, 0);
+    
+    // Convert IST to UTC for storage
+    return new Date(targetDate.getTime() - istOffset);
+  }
+  
+  return null;
 }
 
 router.post('/process', async (req, res) => {

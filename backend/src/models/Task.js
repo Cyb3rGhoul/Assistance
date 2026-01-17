@@ -28,4 +28,8 @@ taskSchema.virtual('dueDateIST').get(function() {
   return this.toIST(this.dueDate);
 });
 
+// Index for efficient reminder queries
+taskSchema.index({ reminderTime: 1, reminderSent: 1, completed: 1 });
+taskSchema.index({ userId: 1, completed: 1 });
+
 export default mongoose.model('Task', taskSchema);

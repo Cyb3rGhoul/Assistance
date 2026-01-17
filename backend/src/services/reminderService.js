@@ -6,8 +6,8 @@ import { sendTaskReminder, sendMorningSummary, sendEveningReport } from './email
 export const startReminderCron = () => {
   console.log('⏰ Starting reminder service...');
   
-  // Check every minute for task reminders (5 min before due time)
-  cron.schedule('* * * * *', async () => {
+  // Check every 5 minutes for task reminders (5 min before due time)
+  cron.schedule('*/5 * * * *', async () => {
     try {
       const now = new Date();
       const fiveMinutesLater = new Date(now.getTime() + 5 * 60000);
@@ -115,5 +115,5 @@ export const startReminderCron = () => {
 
   // Clean startup message
   console.log('⏰ Reminder service started');
-  console.log('📅 Schedule: Reminders every minute, Morning 8AM, Evening 8PM IST');
+  console.log('📅 Schedule: Reminders every 5 minutes, Morning 8AM, Evening 8PM IST');
 };

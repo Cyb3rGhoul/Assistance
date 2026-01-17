@@ -28,8 +28,8 @@ export const startKeepAlive = () => {
     return;
   }
 
-  // Ping every minute to keep Render service active (except during sleep hours)
-  cron.schedule('* * * * *', async () => {
+  // Ping every 5 minutes to keep Render service active (except during sleep hours)
+  cron.schedule('*/5 * * * *', async () => {
     // Check if we're in sleep hours
     if (isWithinSleepHours()) {
       // Silent during sleep hours - no logs to avoid spam
@@ -44,9 +44,8 @@ export const startKeepAlive = () => {
       });
 
       if (response.ok) {
-        // Only log once every 10 minutes to reduce spam
-        const now = new Date();
-        if (now.getMinutes() % 10 === 0) {
+        // Only log once every 30 minutes to reduce spam (since we ping every 5 min)
+        if (now.getMinutes() % 30 === 0) {
           const istTime = now.toLocaleString('en-US', {
             timeZone: 'Asia/Kolkata',
             hour12: true,
@@ -67,5 +66,6 @@ export const startKeepAlive = () => {
 
   console.log('💓 Keep-alive service started (Production mode)');
   console.log('😴 Sleep hours: 12:05 AM - 4:30 AM IST (no pings)');
+  console.log('🔄 Ping frequency: Every 5 minutes');
   console.log(`🎯 Target: ${BACKEND_URL}/api/health`);
 };
