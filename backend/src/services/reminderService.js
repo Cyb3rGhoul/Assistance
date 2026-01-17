@@ -12,16 +12,6 @@ export const startReminderCron = () => {
       const now = new Date();
       const fiveMinutesLater = new Date(now.getTime() + 5 * 60000);
       
-      // Log current time for debugging
-      const istTime = now.toLocaleString('en-US', {
-        timeZone: 'Asia/Kolkata',
-        hour12: true,
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-      
-      console.log(`🔍 Checking reminders at ${istTime} IST`);
-      
       const tasks = await Task.find({
         reminderTime: { 
           $gte: now, 
@@ -31,21 +21,20 @@ export const startReminderCron = () => {
         completed: false
       }).populate('userId');
 
+      // Only log when there are actual reminders to send
       if (tasks.length > 0) {
-        console.log(`📧 Found ${tasks.length} task(s) to remind`);
-      }
-
-      for (const task of tasks) {
-        console.log(`📤 Sending reminder for: ${task.title}`);
-        // Send email reminder only
-        const emailSent = await sendTaskReminder(task, task.userId.email);
+        console.log(`📧 Sending ${tasks.length} reminder(s)`);
         
-        if (emailSent) {
-          task.reminderSent = true;
-          await task.save();
-          console.log(`✅ Reminder sent and marked for: ${task.title}`);
-        } else {
-          console.log(`❌ Failed to send reminder for: ${task.title}`);
+        for (const task of tasks) {
+          const emailSent = await sendTaskReminder(task, task.userId.email);
+          
+          if (emailSent) {
+            task.reminderSent = true;
+            await task.save();
+            console.log(`✅ Reminder sent: ${task.title}`);
+          } else {
+            console.log(`❌ Failed reminder: ${task.title}`);
+          }
         }
       }
     } catch (error) {
@@ -56,9 +45,8 @@ export const startReminderCron = () => {
   // Morning summary at 8:00 AM IST every day
   cron.schedule('30 2 * * *', async () => { // 2:30 UTC = 8:00 AM IST
     try {
-      console.log('🌅 Running morning summary job...');
+      console.log('🌅 Running morning summary...');
       const users = await User.find();
-      console.log(`👥 Found ${users.length} user(s) for morning summary`);
       
       for (const user of users) {
         const todayStart = new Date();
@@ -76,18 +64,14 @@ export const startReminderCron = () => {
         });
         
         if (tasks.length > 0) {
-          console.log(`📧 Sending morning summary to ${user.email} (${tasks.length} tasks)`);
           const emailSent = await sendMorningSummary(user.email, tasks);
           if (emailSent) {
             console.log(`✅ Morning summary sent to ${user.email}`);
           } else {
-            console.log(`❌ Failed to send morning summary to ${user.email}`);
+            console.log(`❌ Failed morning summary to ${user.email}`);
           }
-        } else {
-          console.log(`📭 No tasks for ${user.email}, skipping morning summary`);
         }
       }
-      console.log('✉️ Morning summaries completed');
     } catch (error) {
       console.error('❌ Morning summary error:', error);
     }
@@ -96,9 +80,8 @@ export const startReminderCron = () => {
   // Evening report at 8:00 PM IST every day
   cron.schedule('30 14 * * *', async () => { // 14:30 UTC = 8:00 PM IST
     try {
-      console.log('🌙 Running evening report job...');
+      console.log('🌙 Running evening report...');
       const users = await User.find();
-      console.log(`👥 Found ${users.length} user(s) for evening report`);
       
       for (const user of users) {
         const todayStart = new Date();
@@ -118,30 +101,19 @@ export const startReminderCron = () => {
           completed: false
         });
         
-        console.log(`📧 Sending evening report to ${user.email} (${completedTasks.length} completed, ${pendingTasks.length} pending)`);
         const emailSent = await sendEveningReport(user.email, completedTasks, pendingTasks);
         if (emailSent) {
           console.log(`✅ Evening report sent to ${user.email}`);
         } else {
-          console.log(`❌ Failed to send evening report to ${user.email}`);
+          console.log(`❌ Failed evening report to ${user.email}`);
         }
       }
-      console.log('✉️ Evening reports completed');
     } catch (error) {
       console.error('❌ Evening report error:', error);
     }
   });
 
-  // Log cron job schedule
-  const currentTime = new Date().toLocaleString('en-US', {
-    timeZone: 'Asia/Kolkata',
-    hour12: true
-  });
-  
-  console.log('⏰ Reminder service started (Email only)');
-  console.log(`🕐 Current IST time: ${currentTime}`);
-  console.log('📅 Schedule:');
-  console.log('   • Task reminders: Every minute');
-  console.log('   • Morning summary: 8:00 AM IST daily');
-  console.log('   • Evening report: 8:00 PM IST daily');
+  // Clean startup message
+  console.log('⏰ Reminder service started');
+  console.log('📅 Schedule: Reminders every minute, Morning 8AM, Evening 8PM IST');
 };

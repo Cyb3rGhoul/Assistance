@@ -5,6 +5,8 @@ services:
     buildCommand: cd backend && npm install
     startCommand: cd backend && npm start
     envVars:
+      - key: NODE_ENV
+        value: production
       - key: MONGODB_URI
         sync: false
       - key: JWT_SECRET
@@ -14,4 +16,6 @@ services:
       - key: RESEND_API_KEY
         sync: false
       - key: FRONTEND_URL
+        sync: false
+      - key: BACKEND_URL
         sync: false

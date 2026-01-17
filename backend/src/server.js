@@ -7,6 +7,7 @@ import taskRoutes from './routes/tasks.js';
 import voiceRoutes from './routes/voice.js';
 import linkRoutes from './routes/links.js';
 import { startReminderCron } from './services/reminderService.js';
+import { startKeepAlive } from './services/keepAliveService.js';
 
 dotenv.config();
 
@@ -21,11 +22,22 @@ app.use('/api/tasks', taskRoutes);
 app.use('/api/voice', voiceRoutes);
 app.use('/api/links', linkRoutes);
 
+// Health check endpoint for keep-alive
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    message: 'ARIA Backend is alive'
+  });
+});
+
 // MongoDB Connection
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => {
     console.log('✅ MongoDB connected');
     startReminderCron();
+    startKeepAlive();
   })
   .catch(err => console.error('❌ MongoDB connection error:', err));
 
