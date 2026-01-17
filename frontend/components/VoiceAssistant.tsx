@@ -61,10 +61,48 @@ export default function VoiceAssistant() {
       if (data.action === 'create' || data.action === 'list' || data.action === 'update' || data.action === 'complete' || data.action === 'delete') {
         window.dispatchEvent(new Event('taskUpdate'));
       }
+      
+      // If it's a link search, also trigger links update
+      if (data.action === 'searchLinks') {
+        window.dispatchEvent(new Event('linksUpdate'));
+      }
     } catch (error) {
       console.error('Error:', error);
       setResponse('Sorry, something went wrong.');
     }
+  };
+
+  // Function to render response with clickable links
+  const renderResponse = (text: string) => {
+    // Split text by lines and process each line
+    const lines = text.split('\n');
+    
+    return lines.map((line, lineIndex) => {
+      // Check if line contains a URL
+      const urlRegex = /(https?:\/\/[^\s]+)/g;
+      const parts = line.split(urlRegex);
+      
+      return (
+        <div key={lineIndex} className="mb-1">
+          {parts.map((part, partIndex) => {
+            if (urlRegex.test(part)) {
+              return (
+                <a
+                  key={partIndex}
+                  href={part}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-cyan-400 hover:text-cyan-300 underline break-all"
+                >
+                  {part}
+                </a>
+              );
+            }
+            return <span key={partIndex}>{part}</span>;
+          })}
+        </div>
+      );
+    });
   };
 
   const speak = (text: string) => {
@@ -127,7 +165,9 @@ export default function VoiceAssistant() {
           {response && (
             <div className="bg-zinc-800/50 border border-zinc-700 p-3 sm:p-4">
               <p className="text-[10px] sm:text-xs text-green-400 mb-1 sm:mb-2">&gt; OUTPUT:</p>
-              <p className="text-xs sm:text-sm text-gray-300 break-words">{response}</p>
+              <div className="text-xs sm:text-sm text-gray-300 break-words whitespace-pre-line">
+                {renderResponse(response)}
+              </div>
             </div>
           )}
 

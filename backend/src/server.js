@@ -5,6 +5,7 @@ import mongoose from 'mongoose';
 import authRoutes from './routes/auth.js';
 import taskRoutes from './routes/tasks.js';
 import voiceRoutes from './routes/voice.js';
+import linkRoutes from './routes/links.js';
 import { startReminderCron } from './services/reminderService.js';
 
 dotenv.config();
@@ -18,6 +19,7 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/voice', voiceRoutes);
+app.use('/api/links', linkRoutes);
 
 // MongoDB Connection
 mongoose.connect(process.env.MONGODB_URI)
@@ -29,5 +31,5 @@ mongoose.connect(process.env.MONGODB_URI)
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`🚀 ARIA Server running on port ${PORT}`);
 });

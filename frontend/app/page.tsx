@@ -4,10 +4,12 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import VoiceAssistant from '@/components/VoiceAssistant';
 import TaskList from '@/components/TaskList';
-import { Power } from 'lucide-react';
+import LinksManager from '@/components/LinksManager';
+import { Power, List, Link as LinkIcon } from 'lucide-react';
 
 export default function Home() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [activeTab, setActiveTab] = useState<'tasks' | 'links'>('tasks');
   const router = useRouter();
 
   useEffect(() => {
@@ -62,7 +64,37 @@ export default function Home() {
         {/* Main Content */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 max-w-7xl mx-auto">
           <VoiceAssistant />
-          <TaskList />
+          
+          <div className="space-y-4">
+            {/* Tab Navigation */}
+            <div className="flex border border-zinc-800 bg-zinc-900">
+              <button
+                onClick={() => setActiveTab('tasks')}
+                className={`flex-1 px-4 py-2 text-sm font-mono transition-colors flex items-center justify-center gap-2 ${
+                  activeTab === 'tasks'
+                    ? 'bg-cyan-500 text-black'
+                    : 'text-gray-400 hover:text-cyan-400 hover:bg-zinc-800'
+                }`}
+              >
+                <List className="w-4 h-4" />
+                <span className="hidden sm:inline">TASKS</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('links')}
+                className={`flex-1 px-4 py-2 text-sm font-mono transition-colors flex items-center justify-center gap-2 ${
+                  activeTab === 'links'
+                    ? 'bg-cyan-500 text-black'
+                    : 'text-gray-400 hover:text-cyan-400 hover:bg-zinc-800'
+                }`}
+              >
+                <LinkIcon className="w-4 h-4" />
+                <span className="hidden sm:inline">LINKS</span>
+              </button>
+            </div>
+
+            {/* Tab Content */}
+            {activeTab === 'tasks' ? <TaskList /> : <LinksManager />}
+          </div>
         </div>
 
         {/* Footer */}

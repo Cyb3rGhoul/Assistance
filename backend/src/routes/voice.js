@@ -2,23 +2,69 @@ import express from 'express';
 import { GoogleGenAI } from '@google/genai';
 import { Resend } from 'resend';
 import Task from '../models/Task.js';
+import Link from '../models/Link.js';
 import { authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
 router.use(authenticateToken);
 
+// Helper function to parse time in IST
+function parseTimeToIST(timeString) {
+  if (!timeString) return null;
+  
+  const now = new Date();
+  const istOffset = 5.5 * 60 * 60 * 1000; // IST is UTC+5:30
+  
+  // Convert current time to IST for reference
+  const nowIST = new Date(now.getTime() + istOffset);
+  
+  // Parse the time string and create IST date
+  const parsedDate = new Date(timeString);
+  
+  // If parsing failed, try manual parsing for common formats
+  if (isNaN(parsedDate.getTime())) {
+    // Handle formats like "today 6pm", "tomorrow 5:30pm", etc.
+    const lowerTime = timeString.toLowerCase();
+    
+    let targetDate = new Date(nowIST);
+    
+    if (lowerTime.includes('tomorrow')) {
+      targetDate.setDate(targetDate.getDate() + 1);
+    } else if (lowerTime.includes('today')) {
+      // Keep current date
+    } else if (lowerTime.includes('next week')) {
+      targetDate.setDate(targetDate.getDate() + 7);
+    }
+    
+    // Extract time
+    const timeMatch = lowerTime.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/);
+    if (timeMatch) {
+      let hours = parseInt(timeMatch[1]);
+      const minutes = parseInt(timeMatch[2] || '0');
+      const ampm = timeMatch[3];
+      
+      if (ampm === 'pm' && hours !== 12) hours += 12;
+      if (ampm === 'am' && hours === 12) hours = 0;
+      
+      targetDate.setHours(hours, minutes, 0, 0);
+      
+      // Convert back to UTC for storage
+      return new Date(targetDate.getTime() - istOffset);
+    }
+  }
+  
+  // If we have a valid parsed date, convert from IST to UTC
+  return new Date(parsedDate.getTime() - istOffset);
+}
+
 router.post('/process', async (req, res) => {
   try {
     const { command } = req.body;
-    
-    console.log('Processing command:', command);
     
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey || apiKey.trim() === '') {
       throw new Error('GEMINI_API_KEY is not set or is empty');
     }
-    
-    console.log('API Key exists:', !!apiKey);
     
     const ai = new GoogleGenAI({
       apiKey: apiKey.trim(),
@@ -35,23 +81,32 @@ router.post('/process', async (req, res) => {
       completed: t.completed
     }));
 
+    // Get current IST time for reference
+    const now = new Date();
+    const istOffset = 5.5 * 60 * 60 * 1000;
+    const nowIST = new Date(now.getTime() + istOffset);
+
     const prompt = `You are ARIA, a voice assistant. Parse this command and return ONLY a JSON object (no markdown, no extra text):
 Command: "${command}"
 
-Current date and time: ${new Date().toISOString()}
+Current IST date and time: ${nowIST.toISOString()} (India Standard Time)
 
 Available tasks:
 ${JSON.stringify(tasksList, null, 2)}
 
 Return format:
 {
-  "action": "create|list|update|delete|complete|sendEmail",
+  "action": "create|list|update|delete|complete|sendEmail|saveLink|searchLinks",
   "task": {
     "title": "task title",
     "description": "details or null",
     "dueDate": "ISO date string or null",
     "reminderTime": "ISO date string or null"
   },
+  "link": {
+    "url": "full URL if saving a link"
+  },
+  "searchQuery": "search term for links",
   "taskId": "task id from available tasks if updating/deleting/completing",
   "updateFields": {
     "title": "new title or null",
@@ -65,17 +120,22 @@ Return format:
 IMPORTANT RULES:
 - For "update": Only include fields in "updateFields" that the user explicitly mentioned
 - For "update/delete/complete": Match the task by title from available tasks and set "taskId"
-- For "sendEmail": Use when user asks to send/email task list (e.g., "send my tasks to email", "email me my tasks")
-- Parse dates naturally: "today 6pm" = today at 18:00, "tomorrow 5pm" = tomorrow at 17:00
-- Always return full ISO date format for dates
+- For "sendEmail": Use when user asks to send/email task list
+- For "saveLink": Use when user provides a URL to save/bookmark
+- For "searchLinks": Use when user asks to search/find links by keywords
+- Parse dates naturally in IST: "today 6pm" = today at 18:00 IST, "tomorrow 5pm" = tomorrow at 17:00 IST
+- Always return full ISO date format for dates (will be converted to IST automatically)
+- Convert 12-hour to 24-hour format: 6pm = 18:00, 6am = 06:00
 
 Examples:
 - "remind me to buy groceries tomorrow at 5pm" → action: create
+- "save this link https://example.com" → action: saveLink
+- "bookmark https://github.com/user/repo" → action: saveLink
 - "what are my tasks today" → action: list
 - "mark buy groceries as complete" → action: complete, taskId: (match from tasks)
-- "delete the grocery task" → action: delete, taskId: (match from tasks)
-- "send my tasks to my email" → action: sendEmail
-- "email me all my tasks" → action: sendEmail`;
+- "send my tasks to email" → action: sendEmail
+- "search for react links" → action: searchLinks, searchQuery: "react"
+- "find links about javascript" → action: searchLinks, searchQuery: "javascript"`;
 
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-lite",
@@ -83,17 +143,105 @@ Examples:
     });
     
     const text = response.text.trim();
-    console.log('Gemini response:', text);
-    
     const parsed = JSON.parse(text.replace(/```json\n?|\n?```/g, ''));
 
     let responseData = { ...parsed };
 
     switch (parsed.action) {
       case 'create':
-        const newTask = new Task({ ...parsed.task, userId: req.user.userId });
+        // Parse times to IST
+        const taskData = { ...parsed.task, userId: req.user.userId };
+        if (taskData.dueDate) {
+          taskData.dueDate = parseTimeToIST(taskData.dueDate);
+        }
+        if (taskData.reminderTime) {
+          taskData.reminderTime = parseTimeToIST(taskData.reminderTime);
+        }
+        
+        const newTask = new Task(taskData);
         await newTask.save();
         responseData.taskCreated = newTask;
+        break;
+
+      case 'saveLink':
+        if (!parsed.link?.url) {
+          throw new Error('URL is required to save a link');
+        }
+        
+        // Fetch page metadata
+        let title = parsed.link.url;
+        let description = '';
+        let favicon = '';
+        
+        try {
+          const linkResponse = await fetch(parsed.link.url);
+          const html = await linkResponse.text();
+          
+          const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+          if (titleMatch) title = titleMatch[1].trim();
+          
+          const descMatch = html.match(/<meta[^>]*name=["\']description["\'][^>]*content=["\']([^"\']+)["\'][^>]*>/i);
+          if (descMatch) description = descMatch[1].trim();
+          
+          const faviconMatch = html.match(/<link[^>]*rel=["\'](?:shortcut )?icon["\'][^>]*href=["\']([^"\']+)["\'][^>]*>/i);
+          if (faviconMatch) {
+            favicon = faviconMatch[1];
+            if (favicon.startsWith('/')) {
+              const urlObj = new URL(parsed.link.url);
+              favicon = `${urlObj.protocol}//${urlObj.host}${favicon}`;
+            }
+          }
+        } catch (fetchError) {
+          console.log('Could not fetch page metadata:', fetchError.message);
+        }
+        
+        // AI categorization
+        let autoTags = [];
+        let category = 'General';
+        
+        try {
+          const categoryPrompt = `Analyze this link and return ONLY a JSON object:
+URL: ${parsed.link.url}
+Title: ${title}
+Description: ${description}
+
+Return format:
+{
+  "category": "one of: Technology, News, Education, Entertainment, Shopping, Social, Business, Health, Travel, Food, Sports, Finance, Design, Development, Other",
+  "tags": ["tag1", "tag2"] (max 2 relevant tags, lowercase, most important only)
+}`;
+
+          const categoryResponse = await ai.models.generateContent({
+            model: "gemini-2.5-flash-lite",
+            contents: categoryPrompt,
+          });
+          
+          const responseText = categoryResponse.text.trim();
+          // Remove markdown code blocks if present
+          const cleanedResponse = responseText.replace(/```json\n?|\n?```/g, '');
+          const aiResult = JSON.parse(cleanedResponse);
+          category = aiResult.category || 'General';
+          autoTags = aiResult.tags || [];
+        } catch (aiError) {
+          // AI categorization failed, use defaults
+        }
+        
+        const newLink = new Link({
+          userId: req.user.userId,
+          url: parsed.link.url,
+          title,
+          description,
+          favicon,
+          autoTags,
+          userTags: [],
+          category
+        });
+        
+        await newLink.save();
+        responseData.linkSaved = newLink;
+        if (!responseData.response) {
+          responseData.response = `Saved link: ${title} (Category: ${category})`;
+        }
         break;
 
       case 'list':
@@ -133,10 +281,10 @@ Examples:
             updateData.description = parsed.updateFields.description || null;
           }
           if (parsed.updateFields.dueDate !== null && parsed.updateFields.dueDate !== undefined) {
-            updateData.dueDate = parsed.updateFields.dueDate ? new Date(parsed.updateFields.dueDate) : null;
+            updateData.dueDate = parsed.updateFields.dueDate ? parseTimeToIST(parsed.updateFields.dueDate) : null;
           }
           if (parsed.updateFields.reminderTime !== null && parsed.updateFields.reminderTime !== undefined) {
-            updateData.reminderTime = parsed.updateFields.reminderTime ? new Date(parsed.updateFields.reminderTime) : null;
+            updateData.reminderTime = parsed.updateFields.reminderTime ? parseTimeToIST(parsed.updateFields.reminderTime) : null;
           }
         }
 
@@ -224,6 +372,43 @@ Examples:
         }
         break;
 
+      case 'searchLinks':
+        const searchQuery = parsed.searchQuery || '';
+        if (!searchQuery) {
+          throw new Error('Search query is required');
+        }
+
+        const searchResults = await Link.find({
+          userId: req.user.userId,
+          $or: [
+            { title: { $regex: searchQuery, $options: 'i' } },
+            { description: { $regex: searchQuery, $options: 'i' } },
+            { autoTags: { $in: [new RegExp(searchQuery, 'i')] } },
+            { userTags: { $in: [new RegExp(searchQuery, 'i')] } },
+            { category: { $regex: searchQuery, $options: 'i' } }
+          ]
+        }).sort({ createdAt: -1 });
+
+        responseData.links = searchResults;
+        if (searchResults.length === 0) {
+          responseData.response = `No links found for "${searchQuery}".`;
+        } else {
+          // Return the actual links with clickable URLs
+          let linksList = `Found ${searchResults.length} link${searchResults.length > 1 ? 's' : ''} for "${searchQuery}":\n\n`;
+          
+          searchResults.forEach((link, index) => {
+            linksList += `${index + 1}. ${link.title}\n`;
+            linksList += `   🔗 ${link.url}\n`;
+            if (link.description) {
+              linksList += `   📝 ${link.description.substring(0, 100)}${link.description.length > 100 ? '...' : ''}\n`;
+            }
+            linksList += `   📂 ${link.category} | 🏷️ ${[...link.autoTags, ...link.userTags].join(', ')}\n\n`;
+          });
+          
+          responseData.response = linksList;
+        }
+        break;
+
       case 'sendEmail':
         const resendApiKey = process.env.RESEND_API_KEY;
         
@@ -260,7 +445,7 @@ Examples:
                     <div style="border-left: 2px solid #22d3ee; padding: 12px; margin-bottom: 8px; background: #18181b;">
                       <p style="margin: 0; color: #e5e5e5; font-size: 14px; font-weight: 600;">${task.title}</p>
                       ${task.description ? `<p style="margin: 4px 0 0 0; color: #71717a; font-size: 12px;">${task.description}</p>` : ''}
-                      ${task.reminderTime ? `<p style="margin: 4px 0 0 0; color: #22d3ee; font-size: 11px;">⏰ ${new Date(task.reminderTime).toLocaleString()}</p>` : ''}
+                      ${task.reminderTime ? `<p style="margin: 4px 0 0 0; color: #22d3ee; font-size: 11px;">⏰ ${new Date(task.reminderTime).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</p>` : ''}
                     </div>
                   `).join('')}
                 </div>
@@ -296,7 +481,6 @@ Examples:
             html: emailHtml
           });
 
-          console.log('✉️ Task list email sent to: cyber.ghoul019@gmail.com');
           responseData.emailSent = true;
           if (!responseData.response) {
             responseData.response = `Task list sent to your email. You have ${pendingTasks.length} pending and ${completedTasks.length} completed tasks.`;
@@ -310,12 +494,9 @@ Examples:
 
     res.json(responseData);
   } catch (error) {
-    console.error('Voice processing error:', error);
-    console.error('Error details:', error.message);
     res.status(500).json({ 
       error: error.message, 
-      response: "Sorry, I couldn't process that command.",
-      details: error.toString()
+      response: "Sorry, I couldn't process that command."
     });
   }
 });

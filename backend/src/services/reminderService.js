@@ -20,7 +20,9 @@ export const startReminderCron = () => {
       }).populate('userId');
 
       for (const task of tasks) {
+        // Send email reminder only
         await sendTaskReminder(task, task.userId.email);
+        
         task.reminderSent = true;
         await task.save();
       }
@@ -29,8 +31,8 @@ export const startReminderCron = () => {
     }
   });
 
-  // Morning summary at 8:00 AM every day
-  cron.schedule('0 8 * * *', async () => {
+  // Morning summary at 8:00 AM IST every day
+  cron.schedule('30 2 * * *', async () => { // 2:30 UTC = 8:00 AM IST
     try {
       const users = await User.find();
       
@@ -50,6 +52,7 @@ export const startReminderCron = () => {
         });
         
         if (tasks.length > 0) {
+          // Send email summary only
           await sendMorningSummary(user.email, tasks);
         }
       }
@@ -59,8 +62,8 @@ export const startReminderCron = () => {
     }
   });
 
-  // Evening report at 8:00 PM every day
-  cron.schedule('0 20 * * *', async () => {
+  // Evening report at 8:00 PM IST every day
+  cron.schedule('30 14 * * *', async () => { // 14:30 UTC = 8:00 PM IST
     try {
       const users = await User.find();
       
@@ -82,6 +85,7 @@ export const startReminderCron = () => {
           completed: false
         });
         
+        // Send email report only
         await sendEveningReport(user.email, completedTasks, pendingTasks);
       }
       console.log('✉️ Evening reports sent');
@@ -90,5 +94,5 @@ export const startReminderCron = () => {
     }
   });
 
-  console.log('⏰ Reminder service started (5-min alerts, 8AM summaries, 8PM reports)');
+  console.log('⏰ Reminder service started (Email only)');
 };

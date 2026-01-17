@@ -10,11 +10,19 @@ export const api = {
     },
     tasks: {
       list: `${API_URL}/api/tasks`,
+      create: `${API_URL}/api/tasks`,
       update: (id: string) => `${API_URL}/api/tasks/${id}`,
       delete: (id: string) => `${API_URL}/api/tasks/${id}`,
     },
     voice: {
       process: `${API_URL}/api/voice/process`,
+    },
+    links: {
+      list: `${API_URL}/api/links`,
+      create: `${API_URL}/api/links`,
+      update: (id: string) => `${API_URL}/api/links/${id}`,
+      delete: (id: string) => `${API_URL}/api/links/${id}`,
+      metadata: `${API_URL}/api/links/metadata`,
     },
   },
 };
