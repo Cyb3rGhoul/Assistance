@@ -98,7 +98,7 @@ router.post('/', async (req, res) => {
         }
       }
     } catch (fetchError) {
-      console.log('Could not fetch page metadata:', fetchError.message);
+      // Silently handle metadata fetch errors
     }
     
     // Use AI to categorize and tag
@@ -134,7 +134,7 @@ Return format:
         autoTags = aiResult.tags || [];
       }
     } catch (aiError) {
-      console.log('AI categorization failed:', aiError.message);
+      // Silently handle AI categorization errors - will use manual tags only
     }
     
     const link = new Link({

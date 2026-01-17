@@ -192,7 +192,7 @@ Examples:
             }
           }
         } catch (fetchError) {
-          console.log('Could not fetch page metadata:', fetchError.message);
+          // Silently handle metadata fetch errors
         }
         
         // AI categorization

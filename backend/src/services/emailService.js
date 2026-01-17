@@ -47,7 +47,6 @@ export async function sendTaskReminder(task, userEmail) {
         </div>
       `
     });
-    console.log(`✉️ Reminder sent: ${task.title}`);
     return true;
   } catch (error) {
     console.error('❌ Email reminder failed:', error.message);
@@ -99,7 +98,6 @@ export async function sendMorningSummary(userEmail, tasks) {
         </div>
       `
     });
-    console.log(`✉️ Morning summary sent to: ${userEmail}`);
     return true;
   } catch (error) {
     console.error('❌ Morning summary failed:', error.message);
@@ -164,7 +162,6 @@ export async function sendEveningReport(userEmail, completedTasks, pendingTasks)
         </div>
       `
     });
-    console.log(`✉️ Evening report sent to: ${userEmail}`);
     return true;
   } catch (error) {
     console.error('❌ Evening report failed:', error.message);
