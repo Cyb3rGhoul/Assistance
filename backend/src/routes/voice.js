@@ -23,24 +23,12 @@ function parseTimeToIST(timeString) {
       return parseManualTime(timeString);
     }
     
-    // The AI provides ISO strings in UTC, but they represent IST times
-    // So we need to adjust them back to proper UTC for storage
-    // Example: AI says "2024-01-17T14:35:00.000Z" for 2:35 PM IST
-    // But this is actually 2:35 PM UTC, we need to convert it to 9:05 AM UTC (2:35 PM IST)
+    // The AI provides times like "2024-01-17T14:35:00.000Z" when user says "2:35 PM IST"
+    // We want this to display as 2:35 PM when shown in IST timezone
+    // So we need to subtract the IST offset to get the correct UTC time
     
-    // Get the local time components from the parsed date
-    const year = parsedDate.getUTCFullYear();
-    const month = parsedDate.getUTCMonth();
-    const date = parsedDate.getUTCDate();
-    const hours = parsedDate.getUTCHours();
-    const minutes = parsedDate.getUTCMinutes();
-    const seconds = parsedDate.getUTCSeconds();
-    
-    // Create a new date treating these as IST components
-    const istDate = new Date(year, month, date, hours, minutes, seconds);
-    
-    // Convert IST to UTC for storage
-    return new Date(istDate.getTime() - istOffset);
+    // The AI's time represents the desired IST time, so convert to UTC
+    return new Date(parsedDate.getTime() - istOffset);
     
   } catch (error) {
     console.error('Time parsing error:', error);
@@ -151,7 +139,8 @@ IMPORTANT RULES:
 - For "saveLink": Use when user provides a URL to save/bookmark
 - For "searchLinks": Use when user asks to search/find links by keywords
 - Parse dates naturally in IST: "today 6pm" = today at 18:00 IST, "tomorrow 5pm" = tomorrow at 17:00 IST
-- Always return full ISO date format for dates (will be converted to IST automatically)
+- When providing ISO dates, calculate the correct UTC time that represents the IST time
+- For example: "2:35 PM IST today" should be converted to UTC and provided as ISO string
 - Convert 12-hour to 24-hour format: 6pm = 18:00, 6am = 06:00
 
 Examples:
