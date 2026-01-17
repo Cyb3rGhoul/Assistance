@@ -35,13 +35,13 @@ app.get('/api/health', (req, res) => {
 // MongoDB Connection
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => {
-    console.log('✅ MongoDB connected');
+    console.log('MongoDB connected');
     startReminderCron();
     startKeepAlive();
   })
-  .catch(err => console.error('❌ MongoDB connection error:', err));
+  .catch(err => console.error('MongoDB connection error:', err));
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`🚀 ARIA Server running on port ${PORT}`);
+  console.log(`ARIA Server running on port ${PORT}`);
 });

@@ -46,4 +46,17 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+// Delete all tasks for the user
+router.delete('/', async (req, res) => {
+  try {
+    const result = await Task.deleteMany({ userId: req.user.userId });
+    res.json({ 
+      message: `Deleted ${result.deletedCount} task${result.deletedCount !== 1 ? 's' : ''}`,
+      deletedCount: result.deletedCount 
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;

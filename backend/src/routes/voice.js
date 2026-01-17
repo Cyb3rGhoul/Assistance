@@ -8,6 +8,19 @@ import { authenticateToken } from '../middleware/auth.js';
 const router = express.Router();
 router.use(authenticateToken);
 
+// Simple in-memory session store for pending confirmations
+const pendingConfirmations = new Map();
+
+// Clean up old confirmations (older than 5 minutes)
+setInterval(() => {
+  const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+  for (const [userId, session] of pendingConfirmations.entries()) {
+    if (session.timestamp < fiveMinutesAgo) {
+      pendingConfirmations.delete(userId);
+    }
+  }
+}, 60000); // Clean up every minute
+
 // Helper function to parse time in IST
 function parseTimeToIST(timeString) {
   if (!timeString) return null;
@@ -101,17 +114,30 @@ router.post('/process', async (req, res) => {
     const istOffset = 5.5 * 60 * 60 * 1000;
     const nowIST = new Date(now.getTime() + istOffset);
 
+    // Check for pending confirmations
+    const pendingConfirmation = pendingConfirmations.get(req.user.userId);
+    let contextInfo = '';
+    if (pendingConfirmation) {
+      if (pendingConfirmation.action === 'delete') {
+        contextInfo = `\nPENDING CONFIRMATION: User has a pending delete confirmation for task "${pendingConfirmation.taskTitle}". If user says "yes", "confirm", "delete it", use action "confirmDelete".`;
+      } else if (pendingConfirmation.action === 'deleteAll') {
+        contextInfo = `\nPENDING CONFIRMATION: User has a pending delete all confirmation for ${pendingConfirmation.taskCount} tasks. If user says "yes", "confirm", "delete all", use action "confirmDeleteAll".`;
+      } else if (pendingConfirmation.action === 'deleteLink') {
+        contextInfo = `\nPENDING CONFIRMATION: User has a pending delete confirmation for link "${pendingConfirmation.linkTitle}". If user says "yes", "confirm", "delete it", use action "confirmDeleteLink".`;
+      }
+    }
+
     const prompt = `You are ARIA, a voice assistant. Parse this command and return ONLY a JSON object (no markdown, no extra text):
 Command: "${command}"
 
-Current IST date and time: ${nowIST.toISOString()} (India Standard Time)
+Current IST date and time: ${nowIST.toISOString()} (India Standard Time)${contextInfo}
 
 Available tasks:
 ${JSON.stringify(tasksList, null, 2)}
 
 Return format:
 {
-  "action": "create|list|update|delete|complete|sendEmail|saveLink|searchLinks",
+  "action": "create|list|update|delete|deleteAll|complete|sendEmail|saveLink|searchLinks|deleteLink|confirmDelete|confirmDeleteAll|confirmDeleteLink",
   "task": {
     "title": "task title",
     "description": "details or null",
@@ -123,6 +149,9 @@ Return format:
   },
   "searchQuery": "search term for links",
   "taskId": "task id from available tasks if updating/deleting/completing",
+  "confirmAction": "delete|deleteAll - the action being confirmed",
+  "confirmTarget": "task or link details being confirmed for deletion",
+  "multipleMatches": ["array of matching items when multiple found"],
   "updateFields": {
     "title": "new title or null",
     "description": "new description or null",
@@ -135,8 +164,15 @@ Return format:
 IMPORTANT RULES:
 - For "update": Only include fields in "updateFields" that the user explicitly mentioned
 - For "update/delete/complete": Match the task by title from available tasks and set "taskId"
+- For "delete": If multiple tasks match, use action "delete" with "multipleMatches" array and ask user to specify
+- For "delete": If single match found, use action "delete" and ask for confirmation before deleting
+- For "confirmDelete": Use when user confirms deletion with "yes", "correct", "delete it", "confirm", etc. AND there's a previous delete request context
+- For "confirmDeleteAll": Use when user confirms delete all with "yes", "correct", etc. AND there's a previous deleteAll request context
+- For "deleteAll": Ask for confirmation before deleting all tasks
+- If user says "yes", "correct", "delete it", "confirm" but no clear context, ask them to be more specific
 - For "sendEmail": Use when user asks to send/email task list
 - For "saveLink": Use when user provides a URL to save/bookmark
+- For "deleteLink": Use when user wants to delete a saved link, ask for confirmation first
 - For "searchLinks": Use when user asks to search/find links by keywords
 - Parse dates naturally in IST: "today 6pm" = today at 18:00 IST, "tomorrow 5pm" = tomorrow at 17:00 IST
 - When providing ISO dates, calculate the correct UTC time that represents the IST time
@@ -147,8 +183,13 @@ Examples:
 - "remind me to buy groceries tomorrow at 5pm" → action: create
 - "save this link https://example.com" → action: saveLink
 - "bookmark https://github.com/user/repo" → action: saveLink
+- "delete github link" → action: deleteLink (ask for confirmation first)
 - "what are my tasks today" → action: list
 - "mark buy groceries as complete" → action: complete, taskId: (match from tasks)
+- "delete meeting task" → action: delete (ask for confirmation first)
+- "yes delete it" → action: confirmDelete, taskId: (from previous context)
+- "delete all tasks" → action: deleteAll (ask for confirmation first)
+- "yes clear everything" → action: confirmDeleteAll
 - "send my tasks to email" → action: sendEmail
 - "search for react links" → action: searchLinks, searchQuery: "react"
 - "find links about javascript" → action: searchLinks, searchQuery: "javascript"`;
@@ -167,6 +208,7 @@ Examples:
       case 'create':
         // Parse times to IST
         const taskData = { ...parsed.task, userId: req.user.userId };
+        
         if (taskData.dueDate) {
           taskData.dueDate = parseTimeToIST(taskData.dueDate);
         }
@@ -357,34 +399,130 @@ Return format:
 
       case 'delete':
         let taskToDeleteId = parsed.taskId;
+        let taskToDelete = null;
         
         if (!taskToDeleteId && parsed.task?.title) {
-          const taskToDelete = await Task.findOne({ 
+          // Search for matching tasks
+          const matchingTasks = await Task.find({ 
             title: { $regex: new RegExp(parsed.task.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') },
             userId: req.user.userId 
           });
-          if (!taskToDelete) {
+          
+          if (matchingTasks.length === 0) {
             throw new Error(`Task "${parsed.task.title}" not found`);
+          } else if (matchingTasks.length > 1) {
+            // Multiple matches - ask user to specify
+            responseData.multipleMatches = matchingTasks.map(t => ({
+              id: t._id,
+              title: t.title,
+              description: t.description
+            }));
+            responseData.response = `Found ${matchingTasks.length} tasks matching "${parsed.task.title}":\n\n` +
+              matchingTasks.map((t, i) => `${i + 1}. ${t.title}${t.description ? ` - ${t.description}` : ''}`).join('\n') +
+              '\n\nPlease specify which one you want to delete by saying the number or the full title.';
+            break;
+          } else {
+            // Single match - ask for confirmation
+            taskToDelete = matchingTasks[0];
+            taskToDeleteId = taskToDelete._id;
           }
-          taskToDeleteId = taskToDelete._id;
+        } else if (taskToDeleteId) {
+          taskToDelete = await Task.findOne({ _id: taskToDeleteId, userId: req.user.userId });
         }
 
-        if (!taskToDeleteId) {
-          throw new Error('Task ID or title is required to delete');
-        }
-
-        const deletedTask = await Task.findOneAndDelete({ 
-          _id: taskToDeleteId, 
-          userId: req.user.userId 
-        });
-
-        if (!deletedTask) {
+        if (!taskToDelete) {
           throw new Error('Task not found or you do not have permission to delete it');
         }
 
-        responseData.taskDeleted = deletedTask;
-        if (!responseData.response) {
-          responseData.response = `Deleted task: ${deletedTask.title}`;
+        // Ask for confirmation before deleting
+        pendingConfirmations.set(req.user.userId, {
+          action: 'delete',
+          taskId: taskToDelete._id,
+          taskTitle: taskToDelete.title,
+          timestamp: Date.now()
+        });
+        
+        responseData.confirmAction = 'delete';
+        responseData.confirmTarget = {
+          id: taskToDelete._id,
+          title: taskToDelete.title,
+          description: taskToDelete.description
+        };
+        responseData.response = `Are you sure you want to delete the task "${taskToDelete.title}"? Say "yes" or "delete it" to confirm.`;
+        break;
+
+      case 'deleteAll':
+        // Ask for confirmation before deleting all tasks
+        const taskCount = await Task.countDocuments({ userId: req.user.userId });
+        
+        if (taskCount === 0) {
+          responseData.response = "No tasks found to delete.";
+          break;
+        }
+        
+        pendingConfirmations.set(req.user.userId, {
+          action: 'deleteAll',
+          taskCount: taskCount,
+          timestamp: Date.now()
+        });
+        
+        responseData.confirmAction = 'deleteAll';
+        responseData.confirmTarget = { count: taskCount };
+        responseData.response = `Are you sure you want to delete all ${taskCount} task${taskCount > 1 ? 's' : ''}? This cannot be undone. Say "yes" or "delete all" to confirm.`;
+        break;
+
+      case 'deleteLink':
+        // Find matching links for deletion
+        if (!parsed.searchQuery && !parsed.link?.url) {
+          responseData.response = "Please specify which link you want to delete by providing keywords or the URL.";
+          break;
+        }
+        
+        let linkQuery = {};
+        if (parsed.link?.url) {
+          linkQuery.url = parsed.link.url;
+        } else if (parsed.searchQuery) {
+          linkQuery = {
+            $or: [
+              { title: { $regex: parsed.searchQuery, $options: 'i' } },
+              { description: { $regex: parsed.searchQuery, $options: 'i' } },
+              { autoTags: { $in: [new RegExp(parsed.searchQuery, 'i')] } },
+              { userTags: { $in: [new RegExp(parsed.searchQuery, 'i')] } },
+              { category: { $regex: parsed.searchQuery, $options: 'i' } }
+            ]
+          };
+        }
+        
+        const matchingLinks = await Link.find({ ...linkQuery, userId: req.user.userId });
+        
+        if (matchingLinks.length === 0) {
+          responseData.response = `No links found matching "${parsed.searchQuery || parsed.link.url}".`;
+          break;
+        } else if (matchingLinks.length > 1) {
+          // Multiple matches - ask user to specify
+          responseData.multipleMatches = matchingLinks.map(l => ({
+            id: l._id,
+            title: l.title,
+            url: l.url,
+            category: l.category
+          }));
+          responseData.response = `Found ${matchingLinks.length} links matching "${parsed.searchQuery}":\n\n` +
+            matchingLinks.map((l, i) => `${i + 1}. ${l.title}\n   🔗 ${l.url}\n   📂 ${l.category}`).join('\n\n') +
+            '\n\nPlease specify which one you want to delete by saying the number or being more specific.';
+          break;
+        } else {
+          // Single match - ask for confirmation
+          const linkToDelete = matchingLinks[0];
+          
+          pendingConfirmations.set(req.user.userId, {
+            action: 'deleteLink',
+            linkId: linkToDelete._id,
+            linkTitle: linkToDelete.title,
+            linkUrl: linkToDelete.url,
+            timestamp: Date.now()
+          });
+          
+          responseData.response = `Are you sure you want to delete the link "${linkToDelete.title}" (${linkToDelete.url})? Say "yes" or "delete it" to confirm.`;
         }
         break;
 
@@ -423,6 +561,78 @@ Return format:
           
           responseData.response = linksList;
         }
+        break;
+
+      case 'confirmDelete':
+        // User confirmed deletion - check if there's a pending confirmation
+        const pendingDelete = pendingConfirmations.get(req.user.userId);
+        
+        if (!pendingDelete || pendingDelete.action !== 'delete') {
+          responseData.response = "I don't have any pending delete confirmation. Please specify which task you want to delete.";
+          break;
+        }
+        
+        const deletedTask = await Task.findOneAndDelete({ 
+          _id: pendingDelete.taskId, 
+          userId: req.user.userId 
+        });
+
+        if (!deletedTask) {
+          responseData.response = "Task not found or already deleted.";
+        } else {
+          responseData.taskDeleted = deletedTask;
+          responseData.response = `Successfully deleted task: "${deletedTask.title}"`;
+        }
+        
+        // Clear the pending confirmation
+        pendingConfirmations.delete(req.user.userId);
+        break;
+
+      case 'confirmDeleteAll':
+        // User confirmed delete all - check if there's a pending confirmation
+        const pendingDeleteAll = pendingConfirmations.get(req.user.userId);
+        
+        if (!pendingDeleteAll || pendingDeleteAll.action !== 'deleteAll') {
+          responseData.response = "I don't have any pending delete all confirmation. Please say 'delete all tasks' first.";
+          break;
+        }
+        
+        const deleteResult = await Task.deleteMany({ userId: req.user.userId });
+        
+        responseData.deletedCount = deleteResult.deletedCount;
+        if (deleteResult.deletedCount === 0) {
+          responseData.response = "No tasks found to delete.";
+        } else {
+          responseData.response = `Successfully deleted all ${deleteResult.deletedCount} task${deleteResult.deletedCount > 1 ? 's' : ''}. Your task list is now empty.`;
+        }
+        
+        // Clear the pending confirmation
+        pendingConfirmations.delete(req.user.userId);
+        break;
+
+      case 'confirmDeleteLink':
+        // User confirmed link deletion
+        const pendingDeleteLink = pendingConfirmations.get(req.user.userId);
+        
+        if (!pendingDeleteLink || pendingDeleteLink.action !== 'deleteLink') {
+          responseData.response = "I don't have any pending link delete confirmation. Please specify which link you want to delete.";
+          break;
+        }
+        
+        const deletedLink = await Link.findOneAndDelete({ 
+          _id: pendingDeleteLink.linkId, 
+          userId: req.user.userId 
+        });
+
+        if (!deletedLink) {
+          responseData.response = "Link not found or already deleted.";
+        } else {
+          responseData.linkDeleted = deletedLink;
+          responseData.response = `Successfully deleted link: "${deletedLink.title}" (${deletedLink.url})`;
+        }
+        
+        // Clear the pending confirmation
+        pendingConfirmations.delete(req.user.userId);
         break;
 
       case 'sendEmail':

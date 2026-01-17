@@ -4,7 +4,7 @@ import User from '../models/User.js';
 import { sendTaskReminder, sendMorningSummary, sendEveningReport } from './emailService.js';
 
 export const startReminderCron = () => {
-  console.log('⏰ Starting reminder service...');
+  console.log('Reminder service started');
   
   // Check every 5 minutes for task reminders (5 min before due time)
   cron.schedule('*/5 * * * *', async () => {
@@ -23,29 +23,30 @@ export const startReminderCron = () => {
 
       // Only log when there are actual reminders to send
       if (tasks.length > 0) {
-        console.log(`📧 Sending ${tasks.length} reminder(s)`);
+        console.log(`Sending ${tasks.length} reminder(s)`);
         
         for (const task of tasks) {
+          console.log(`Processing reminder for: ${task.title} (due: ${task.reminderTime.toISOString()})`);
           const emailSent = await sendTaskReminder(task, task.userId.email);
           
           if (emailSent) {
             task.reminderSent = true;
             await task.save();
-            console.log(`✅ Reminder sent: ${task.title}`);
+            console.log(`Reminder sent: ${task.title}`);
           } else {
-            console.log(`❌ Failed reminder: ${task.title}`);
+            console.log(`Failed reminder: ${task.title}`);
           }
         }
       }
     } catch (error) {
-      console.error('❌ Reminder cron error:', error);
+      console.error('Reminder cron error:', error);
     }
   });
 
   // Morning summary at 8:00 AM IST every day
   cron.schedule('30 2 * * *', async () => { // 2:30 UTC = 8:00 AM IST
     try {
-      console.log('🌅 Running morning summary...');
+      console.log('Running morning summary...');
       const users = await User.find();
       
       for (const user of users) {
@@ -66,21 +67,21 @@ export const startReminderCron = () => {
         if (tasks.length > 0) {
           const emailSent = await sendMorningSummary(user.email, tasks);
           if (emailSent) {
-            console.log(`✅ Morning summary sent to ${user.email}`);
+            console.log(`Morning summary sent to ${user.email}`);
           } else {
-            console.log(`❌ Failed morning summary to ${user.email}`);
+            console.log(`Failed morning summary to ${user.email}`);
           }
         }
       }
     } catch (error) {
-      console.error('❌ Morning summary error:', error);
+      console.error('Morning summary error:', error);
     }
   });
 
   // Evening report at 8:00 PM IST every day
   cron.schedule('30 14 * * *', async () => { // 14:30 UTC = 8:00 PM IST
     try {
-      console.log('🌙 Running evening report...');
+      console.log('Running evening report...');
       const users = await User.find();
       
       for (const user of users) {
@@ -103,17 +104,16 @@ export const startReminderCron = () => {
         
         const emailSent = await sendEveningReport(user.email, completedTasks, pendingTasks);
         if (emailSent) {
-          console.log(`✅ Evening report sent to ${user.email}`);
+          console.log(`Evening report sent to ${user.email}`);
         } else {
-          console.log(`❌ Failed evening report to ${user.email}`);
+          console.log(`Failed evening report to ${user.email}`);
         }
       }
     } catch (error) {
-      console.error('❌ Evening report error:', error);
+      console.error('Evening report error:', error);
     }
   });
 
   // Clean startup message
-  console.log('⏰ Reminder service started');
-  console.log('📅 Schedule: Reminders every 5 minutes, Morning 8AM, Evening 8PM IST');
+  console.log('Reminder service started');
 };

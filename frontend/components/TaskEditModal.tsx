@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { X, Calendar, Clock, Save } from 'lucide-react';
 import api from '@/lib/api';
+import { utcToISTDate, utcToISTTime, istToUTC } from '@/lib/timeUtils';
 
 interface Task {
   _id: string;
@@ -32,23 +33,19 @@ export default function TaskEditModal({ task, isOpen, onClose, onSave }: TaskEdi
 
   useEffect(() => {
     if (task) {
-      // Convert UTC dates to IST for display
-      const istOffset = 5.5 * 60 * 60 * 1000;
-      
+      // Convert UTC dates to IST for display using utility functions
       let dueDateIST = '';
       let dueTimeIST = '';
       if (task.dueDate) {
-        const dueIST = new Date(new Date(task.dueDate).getTime() + istOffset);
-        dueDateIST = dueIST.toISOString().split('T')[0];
-        dueTimeIST = dueIST.toTimeString().slice(0, 5);
+        dueDateIST = utcToISTDate(task.dueDate);
+        dueTimeIST = utcToISTTime(task.dueDate);
       }
       
       let reminderDateIST = '';
       let reminderTimeIST = '';
       if (task.reminderTime) {
-        const reminderIST = new Date(new Date(task.reminderTime).getTime() + istOffset);
-        reminderDateIST = reminderIST.toISOString().split('T')[0];
-        reminderTimeIST = reminderIST.toTimeString().slice(0, 5);
+        reminderDateIST = utcToISTDate(task.reminderTime);
+        reminderTimeIST = utcToISTTime(task.reminderTime);
       }
 
       setFormData({
@@ -68,19 +65,15 @@ export default function TaskEditModal({ task, isOpen, onClose, onSave }: TaskEdi
     try {
       const token = localStorage.getItem('token');
       
-      // Convert IST back to UTC for storage
-      const istOffset = 5.5 * 60 * 60 * 1000;
-      
+      // Convert IST back to UTC for storage using utility function
       let dueDate = null;
       if (formData.dueDate && formData.dueTime) {
-        const dueDateTimeIST = new Date(`${formData.dueDate}T${formData.dueTime}:00`);
-        dueDate = new Date(dueDateTimeIST.getTime() - istOffset).toISOString();
+        dueDate = istToUTC(formData.dueDate, formData.dueTime);
       }
       
       let reminderTime = null;
       if (formData.reminderDate && formData.reminderTime) {
-        const reminderDateTimeIST = new Date(`${formData.reminderDate}T${formData.reminderTime}:00`);
-        reminderTime = new Date(reminderDateTimeIST.getTime() - istOffset).toISOString();
+        reminderTime = istToUTC(formData.reminderDate, formData.reminderTime);
       }
 
       await fetch(api.endpoints.tasks.update(task._id), {

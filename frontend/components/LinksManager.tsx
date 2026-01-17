@@ -31,6 +31,13 @@ export default function LinksManager() {
   const [newUrl, setNewUrl] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{
+    isOpen: boolean;
+    link: Link | null;
+  }>({
+    isOpen: false,
+    link: null
+  });
 
   const fetchLinks = async () => {
     try {
@@ -131,9 +138,24 @@ export default function LinksManager() {
       });
       await fetchLinks();
       await fetchMetadata();
+      setDeleteConfirmation({ isOpen: false, link: null });
     } catch (error) {
       console.error('Error deleting link:', error);
     }
+  };
+
+  const showDeleteConfirmation = (link: Link) => {
+    setDeleteConfirmation({ isOpen: true, link });
+  };
+
+  const handleConfirmDelete = () => {
+    if (deleteConfirmation.link) {
+      deleteLink(deleteConfirmation.link._id);
+    }
+  };
+
+  const handleCancelDelete = () => {
+    setDeleteConfirmation({ isOpen: false, link: null });
   };
 
   const addUserTag = async (linkId: string, tag: string) => {
@@ -339,7 +361,7 @@ export default function LinksManager() {
                     </div>
                     
                     <button
-                      onClick={() => deleteLink(link._id)}
+                      onClick={() => showDeleteConfirmation(link)}
                       className="text-red-500 hover:text-red-400 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
                     >
                       <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
@@ -405,6 +427,54 @@ export default function LinksManager() {
           ))
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmation.isOpen && deleteConfirmation.link && (
+        <div 
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          onClick={(e) => e.target === e.currentTarget && handleCancelDelete()}
+        >
+          <div 
+            className="bg-zinc-900 border border-zinc-800 p-6 max-w-md w-full"
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') handleCancelDelete();
+              if (e.key === 'Enter') handleConfirmDelete();
+            }}
+            tabIndex={-1}
+          >
+            <div className="border-b border-zinc-800 pb-3 mb-4">
+              <p className="text-[10px] text-gray-500 tracking-wider">&gt; CONFIRM_DELETE_LINK</p>
+            </div>
+            
+            <div className="mb-6">
+              <p className="text-gray-200 text-sm font-mono mb-2">
+                Delete link: "{deleteConfirmation.link.title}"?
+              </p>
+              <p className="text-gray-500 text-xs font-mono mb-2 break-all">
+                {deleteConfirmation.link.url}
+              </p>
+              <p className="text-red-400 text-xs font-mono">
+                This action cannot be undone.
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={handleCancelDelete}
+                className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-gray-300 px-4 py-2 text-xs font-mono border border-zinc-700 transition-colors"
+              >
+                CANCEL
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                className="flex-1 bg-red-900 hover:bg-red-800 text-red-100 px-4 py-2 text-xs font-mono border border-red-700 transition-colors"
+              >
+                DELETE
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

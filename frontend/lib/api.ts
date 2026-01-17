@@ -13,6 +13,7 @@ export const api = {
       create: `${API_URL}/api/tasks`,
       update: (id: string) => `${API_URL}/api/tasks/${id}`,
       delete: (id: string) => `${API_URL}/api/tasks/${id}`,
+      deleteAll: `${API_URL}/api/tasks`,
     },
     voice: {
       process: `${API_URL}/api/voice/process`,

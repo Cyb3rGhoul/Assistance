@@ -1,12 +1,14 @@
 import { Resend } from 'resend';
 
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
-
 export async function sendTaskReminder(task, userEmail) {
-  if (!resend) {
+  const resendApiKey = process.env.RESEND_API_KEY;
+  
+  if (!resendApiKey) {
     console.warn('⚠️ Resend API key not configured. Skipping email.');
     return false;
   }
+  
+  const resend = new Resend(resendApiKey);
   
   try {
     await resend.emails.send({
@@ -55,11 +57,14 @@ export async function sendTaskReminder(task, userEmail) {
 }
 
 export async function sendMorningSummary(userEmail, tasks) {
-  if (!resend) {
+  const resendApiKey = process.env.RESEND_API_KEY;
+  
+  if (!resendApiKey) {
     console.warn('⚠️ Resend API key not configured. Skipping email.');
     return false;
   }
   
+  const resend = new Resend(resendApiKey);
   const pendingTasks = tasks.filter(t => !t.completed);
   
   try {
@@ -106,10 +111,14 @@ export async function sendMorningSummary(userEmail, tasks) {
 }
 
 export async function sendEveningReport(userEmail, completedTasks, pendingTasks) {
-  if (!resend) {
+  const resendApiKey = process.env.RESEND_API_KEY;
+  
+  if (!resendApiKey) {
     console.warn('⚠️ Resend API key not configured. Skipping email.');
     return false;
   }
+  
+  const resend = new Resend(resendApiKey);
   
   try {
     await resend.emails.send({

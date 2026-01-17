@@ -1,5 +1,6 @@
-// Keep Alive Service - Prevents Render from sleeping the backend
-// Pings the server every minute to maintain activity
+// Keep Alive Service - Prevents services from sleeping due to inactivity
+// Pings the server every 5 minutes to maintain activity
+// Works in both development and production modes
 // Sleep hours: 12:05 AM - 4:30 AM IST (no pings during sleep time)
 
 import cron from 'node-cron';
@@ -22,13 +23,13 @@ const isWithinSleepHours = () => {
 };
 
 export const startKeepAlive = () => {
-  // Only run keep-alive in production (Render)
-  if (process.env.NODE_ENV !== 'production') {
-    console.log('🏠 Development mode - Keep-alive disabled');
-    return;
-  }
+  const isDev = process.env.NODE_ENV !== 'production';
+  const mode = isDev ? 'Development' : 'Production';
+  
+  // Run keep-alive in both development and production modes
+  console.log(`Keep-alive service started (${mode})`);
 
-  // Ping every 5 minutes to keep Render service active (except during sleep hours)
+  // Ping every 5 minutes to keep service active (except during sleep hours)
   cron.schedule('*/5 * * * *', async () => {
     // Check if we're in sleep hours
     if (isWithinSleepHours()) {
@@ -45,6 +46,7 @@ export const startKeepAlive = () => {
 
       if (response.ok) {
         // Only log once every 30 minutes to reduce spam (since we ping every 5 min)
+        const now = new Date();
         if (now.getMinutes() % 30 === 0) {
           const istTime = now.toLocaleString('en-US', {
             timeZone: 'Asia/Kolkata',
@@ -52,20 +54,21 @@ export const startKeepAlive = () => {
             hour: '2-digit',
             minute: '2-digit'
           });
-          console.log(`💓 Keep-alive active at ${istTime} IST`);
+          console.log(`Keep-alive active at ${istTime} IST (${mode})`);
         }
       }
     } catch (error) {
-      // Silently handle errors to avoid spam
-      // Only log critical errors
-      if (!error.message.includes('timeout') && !error.message.includes('ECONNREFUSED')) {
-        console.log(`🔄 Keep-alive error: ${error.message}`);
+      // In development, show more detailed errors for debugging
+      if (isDev) {
+        console.log(`Keep-alive error (${mode}):`, error.message);
+      } else {
+        // In production, only log critical errors
+        if (!error.message.includes('timeout') && !error.message.includes('ECONNREFUSED')) {
+          console.log(`Keep-alive error: ${error.message}`);
+        }
       }
     }
   });
 
-  console.log('💓 Keep-alive service started (Production mode)');
-  console.log('😴 Sleep hours: 12:05 AM - 4:30 AM IST (no pings)');
-  console.log('🔄 Ping frequency: Every 5 minutes');
-  console.log(`🎯 Target: ${BACKEND_URL}/api/health`);
+  console.log(`Keep-alive service started (${mode})`);
 };
