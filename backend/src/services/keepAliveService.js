@@ -5,8 +5,6 @@
 
 import cron from 'node-cron';
 
-const BACKEND_URL = process.env.BACKEND_URL || 'https://your-app-name.onrender.com';
-
 // Check if current time is within sleep hours (12:05 AM - 4:30 AM IST)
 const isWithinSleepHours = () => {
   const now = new Date();
@@ -25,12 +23,15 @@ const isWithinSleepHours = () => {
 export const startKeepAlive = () => {
   const isDev = process.env.NODE_ENV !== 'production';
   const mode = isDev ? 'Development' : 'Production';
+  const BACKEND_URL = process.env.BACKEND_URL || (isDev ? 'http://localhost:5000' : 'https://assistance-p1pr.onrender.com');
   
-  // Run keep-alive in both development and production modes
   console.log(`Keep-alive service started (${mode})`);
+  console.log(`Target URL: ${BACKEND_URL}/api/health`);
 
   // Ping every 5 minutes to keep service active (except during sleep hours)
   cron.schedule('*/5 * * * *', async () => {
+    const now = new Date();
+
     // Check if we're in sleep hours
     if (isWithinSleepHours()) {
       // Silent during sleep hours - no logs to avoid spam
@@ -46,7 +47,6 @@ export const startKeepAlive = () => {
 
       if (response.ok) {
         // Only log once every 30 minutes to reduce spam (since we ping every 5 min)
-        const now = new Date();
         if (now.getMinutes() % 30 === 0) {
           const istTime = now.toLocaleString('en-US', {
             timeZone: 'Asia/Kolkata',
@@ -54,21 +54,17 @@ export const startKeepAlive = () => {
             hour: '2-digit',
             minute: '2-digit'
           });
-          console.log(`Keep-alive active at ${istTime} IST (${mode})`);
+          console.log(`Keep-alive active at ${istTime} IST`);
         }
       }
     } catch (error) {
-      // In development, show more detailed errors for debugging
-      if (isDev) {
-        console.log(`Keep-alive error (${mode}):`, error.message);
-      } else {
-        // In production, only log critical errors
-        if (!error.message.includes('timeout') && !error.message.includes('ECONNREFUSED')) {
-          console.log(`Keep-alive error: ${error.message}`);
-        }
-      }
+      const istTime = now.toLocaleString('en-US', {
+        timeZone: 'Asia/Kolkata',
+        hour12: true,
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      console.log(`Keep-alive error at ${istTime} IST:`, error.message);
     }
   });
-
-  console.log(`Keep-alive service started (${mode})`);
 };
