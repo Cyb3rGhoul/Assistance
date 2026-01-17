@@ -224,17 +224,17 @@ export default function LinksManager() {
           <button
             onClick={() => addLink(newUrl)}
             disabled={!newUrl || isLoading}
-            className="px-4 py-2 bg-cyan-500 hover:bg-cyan-400 disabled:bg-zinc-700 disabled:text-gray-500 text-black text-sm font-mono transition-colors flex items-center gap-2"
+            className="px-3 sm:px-4 py-2 bg-cyan-500 hover:bg-cyan-400 disabled:bg-zinc-700 disabled:text-gray-500 text-black text-sm font-mono transition-colors flex items-center justify-center gap-2"
           >
             {isLoading ? (
               <>
                 <div className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin"></div>
-                SAVING...
+                <span className="hidden sm:inline">SAVING...</span>
               </>
             ) : (
               <>
                 <Plus className="w-4 h-4" />
-                ADD
+                <span className="hidden sm:inline">ADD</span>
               </>
             )}
           </button>
