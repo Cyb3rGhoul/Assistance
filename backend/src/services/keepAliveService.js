@@ -26,7 +26,6 @@ export const startKeepAlive = () => {
   const BACKEND_URL = process.env.BACKEND_URL || (isDev ? 'http://localhost:5000' : 'https://assistance-p1pr.onrender.com');
   
   console.log(`Keep-alive service started (${mode})`);
-  console.log(`Target URL: ${BACKEND_URL}/api/health`);
 
   // Ping every 5 minutes to keep service active (except during sleep hours)
   cron.schedule('*/5 * * * *', async () => {
@@ -46,8 +45,8 @@ export const startKeepAlive = () => {
       });
 
       if (response.ok) {
-        // Only log once every 30 minutes to reduce spam (since we ping every 5 min)
-        if (now.getMinutes() % 30 === 0) {
+        // Log every 10 minutes to reduce spam (pings every 5 min, logs at 0, 10, 20, 30, 40, 50)
+        if (now.getMinutes() % 10 === 0) {
           const istTime = now.toLocaleString('en-US', {
             timeZone: 'Asia/Kolkata',
             hour12: true,
