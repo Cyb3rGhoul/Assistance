@@ -39,6 +39,39 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Test email endpoint for debugging
+app.post('/api/test-email', async (req, res) => {
+  try {
+    const { email, resendApiKey } = req.body;
+    
+    if (!email || !resendApiKey) {
+      return res.status(400).json({ error: 'Email and resendApiKey are required' });
+    }
+    
+    const { Resend } = await import('resend');
+    const resend = new Resend(resendApiKey);
+    
+    const result = await resend.emails.send({
+      from: 'ARIA Assistant <onboarding@resend.dev>',
+      to: email,
+      subject: 'Test Email from ARIA',
+      html: '<h1>Test Email</h1><p>If you receive this, your email configuration is working!</p>'
+    });
+    
+    res.json({ 
+      success: true, 
+      message: 'Test email sent successfully',
+      emailId: result.data?.id 
+    });
+  } catch (error) {
+    console.error('Test email error:', error);
+    res.status(500).json({ 
+      error: 'Failed to send test email', 
+      details: error.message 
+    });
+  }
+});
+
 // MongoDB Connection
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => {

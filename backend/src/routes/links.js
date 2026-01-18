@@ -61,17 +61,20 @@ router.get('/metadata', async (req, res) => {
 // Add new link with AI categorization
 router.post('/', async (req, res) => {
   try {
-    const { url, userTags = [] } = req.body;
+    const { url, userTags = [], testMode = false } = req.body;
     
     if (!url) {
       return res.status(400).json({ error: 'URL is required' });
     }
     
-    // Get user to access their API key
-    const User = (await import('../models/User.js')).default;
-    const user = await User.findById(req.user.userId);
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+    // Get user to access their API key (only if not in test mode)
+    let user = null;
+    if (!testMode) {
+      const User = (await import('../models/User.js')).default;
+      user = await User.findById(req.user.userId);
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
     }
     
     // Fetch page metadata with enhanced content extraction
@@ -207,18 +210,50 @@ router.post('/', async (req, res) => {
       console.error('Metadata fetch error:', fetchError.message);
     }
     
-    // Use AI to categorize and tag with enhanced content understanding
+    // Use AI to categorize and tag with enhanced content understanding (skip in test mode)
     let autoTags = [];
     let category = 'General';
     let aiTitle = title;
     let aiDescription = description;
     
-    try {
-      const apiKey = user.getCurrentApiKey();
-      if (apiKey) {
-        const ai = new GoogleGenAI({ apiKey: apiKey.trim() });
-        
-        const prompt = `Analyze this link and its content, then return ONLY a JSON object:
+    if (testMode) {
+      // In test mode, just use basic categorization without AI
+      const domain = new URL(url).hostname.toLowerCase();
+      if (domain.includes('youtube.com') || domain.includes('youtu.be')) {
+        category = 'Entertainment';
+        autoTags = ['video', 'youtube'];
+      } else if (domain.includes('github.com')) {
+        category = 'Development';
+        autoTags = ['code', 'github'];
+      } else if (domain.includes('stackoverflow.com')) {
+        category = 'Technology';
+        autoTags = ['programming', 'qa'];
+      } else if (domain.includes('medium.com') || domain.includes('dev.to')) {
+        category = 'Education';
+        autoTags = ['article', 'blog'];
+      } else if (domain.includes('twitter.com') || domain.includes('x.com')) {
+        category = 'Social';
+        autoTags = ['social', 'twitter'];
+      } else if (domain.includes('reddit.com')) {
+        category = 'Social';
+        autoTags = ['social', 'reddit'];
+      }
+      
+      console.log('TEST MODE - Extracted data:');
+      console.log('Title:', title);
+      console.log('Description:', description);
+      console.log('Content Info:', contentInfo);
+      console.log('Category:', category);
+      console.log('Auto Tags:', autoTags);
+      
+    } else {
+      // Normal AI processing
+      try {
+        const apiKey = user.getCurrentApiKey();
+        if (apiKey) {
+          const ai = new GoogleGenAI({ apiKey: apiKey.trim() });
+          
+          const prompt = `Analyze this link and its content, then return ONLY a JSON object:
 
 URL: ${url}
 Original Title: ${title}
@@ -226,64 +261,18 @@ Original Description: ${description}
 Content Info: ${contentInfo}
 Domain: ${new URL(url).hostname}
 
-Based on the content, provide:
-1. An improved, concise title (max 80 chars) that clearly describes what this link is about
-2. A brief, informative description (max 120 chars) that explains the content value
-3. A category from the predefined list
-4. 2-3 relevant tags that describe the content type and topic
+Instructions:
+1. ONLY improve the title if the original is generic, unclear, or unhelpful (like just "YouTube" or domain name)
+2. ONLY improve the description if the original is missing, too short, or unclear
+3. If the original title and description are already good and descriptive, keep them as-is
+4. Focus on accurate categorization and relevant tags
 
 Return format:
 {
-  "title": "improved title that clearly describes the content",
-  "description": "brief description of what this content offers or is about",
+  "title": "keep original title unless it needs improvement",
+  "description": "keep original description unless it needs improvement", 
   "category": "one of: Technology, News, Education, Entertainment, Shopping, Social, Business, Health, Travel, Food, Sports, Finance, Design, Development, Other",
   "tags": ["tag1", "tag2", "tag3"] (max 3 relevant tags, lowercase, specific to content)
-}
-
-Examples:
-- YouTube video about React: {"title": "React Tutorial: Building Modern Web Apps", "description": "Step-by-step guide to creating React applications with hooks and components", "category": "Education", "tags": ["react", "tutorial", "javascript"]}
-- GitHub repo: {"title": "Open Source Machine Learning Library", "description": "Python library for building and training neural networks", "category": "Development", "tags": ["python", "machine-learning", "open-source"]}`;
-
-        const response = await ai.models.generateContent({
-          model: "gemini-2.5-flash-lite",
-          contents: prompt,
-        });
-        
-        const responseText = response.text.trim();
-        // Remove markdown code blocks if present
-        const cleanedResponse = responseText.replace(/```json\n?|\n?```/g, '');
-        const aiResult = JSON.parse(cleanedResponse);
-        
-        // Use AI-generated content if it's better than extracted content
-        if (aiResult.title && aiResult.title.length > 10 && aiResult.title !== title) {
-          aiTitle = aiResult.title;
-        }
-        if (aiResult.description && aiResult.description.length > 20) {
-          aiDescription = aiResult.description;
-        }
-        category = aiResult.category || 'General';
-        autoTags = aiResult.tags || [];
-      }
-    } catch (aiError) {
-      console.error('AI categorization error:', aiError.message);
-      // Try backup API key if available
-      try {
-        if (user.geminiApiKey2 && user.currentApiKeyIndex === 1) {
-          const backupApiKey = user.geminiApiKey2;
-          const ai = new GoogleGenAI({ apiKey: backupApiKey.trim() });
-          
-          const prompt = `Analyze this link and return ONLY a JSON object:
-URL: ${url}
-Title: ${title}
-Description: ${description}
-Content: ${contentInfo}
-
-Return format:
-{
-  "title": "improved title (max 80 chars)",
-  "description": "brief description (max 120 chars)",
-  "category": "one of: Technology, News, Education, Entertainment, Shopping, Social, Business, Health, Travel, Food, Sports, Finance, Design, Development, Other",
-  "tags": ["tag1", "tag2", "tag3"] (max 3 relevant tags, lowercase)
 }`;
 
           const response = await ai.models.generateContent({
@@ -292,25 +281,72 @@ Return format:
           });
           
           const responseText = response.text.trim();
+          // Remove markdown code blocks if present
           const cleanedResponse = responseText.replace(/```json\n?|\n?```/g, '');
           const aiResult = JSON.parse(cleanedResponse);
           
-          if (aiResult.title && aiResult.title.length > 10) aiTitle = aiResult.title;
-          if (aiResult.description && aiResult.description.length > 20) aiDescription = aiResult.description;
+          // Only use AI title if it's significantly different and better
+          if (aiResult.title && aiResult.title !== title && aiResult.title.length > 10) {
+            // Check if original title is generic or needs improvement
+            const genericTitles = ['youtube', 'github', 'twitter', 'reddit', 'medium', 'stack overflow'];
+            const isGeneric = genericTitles.some(generic => title.toLowerCase().includes(generic) && title.length < 50);
+            
+            if (isGeneric || title === url || title.length < 20) {
+              aiTitle = aiResult.title;
+            }
+          }
+          
+          // Only use AI description if original is missing or too short
+          if (aiResult.description && (!description || description.length < 30)) {
+            aiDescription = aiResult.description;
+          }
+          
           category = aiResult.category || 'General';
           autoTags = aiResult.tags || [];
-          
-          // Switch to backup key for future requests
-          await user.switchToBackupApiKey();
         }
-      } catch (backupError) {
-        console.error('Backup API key also failed:', backupError.message);
-        // Use extracted content as fallback
+      } catch (aiError) {
+        console.error('AI categorization error:', aiError.message);
+        // Try backup API key if available
+        try {
+          if (user.geminiApiKey2 && user.currentApiKeyIndex === 1) {
+            const backupApiKey = user.geminiApiKey2;
+            const ai = new GoogleGenAI({ apiKey: backupApiKey.trim() });
+            
+            const prompt = `Analyze this link and return ONLY a JSON object:
+URL: ${url}
+Title: ${title}
+Description: ${description}
+
+Return format:
+{
+  "category": "one of: Technology, News, Education, Entertainment, Shopping, Social, Business, Health, Travel, Food, Sports, Finance, Design, Development, Other",
+  "tags": ["tag1", "tag2", "tag3"] (max 3 relevant tags, lowercase)
+}`;
+
+            const response = await ai.models.generateContent({
+              model: "gemini-2.5-flash-lite",
+              contents: prompt,
+            });
+            
+            const responseText = response.text.trim();
+            const cleanedResponse = responseText.replace(/```json\n?|\n?```/g, '');
+            const aiResult = JSON.parse(cleanedResponse);
+            
+            category = aiResult.category || 'General';
+            autoTags = aiResult.tags || [];
+            
+            // Switch to backup key for future requests
+            await user.switchToBackupApiKey();
+          }
+        } catch (backupError) {
+          console.error('Backup API key also failed:', backupError.message);
+          // Use extracted content as fallback
+        }
       }
     }
     
     const link = new Link({
-      userId: req.user.userId,
+      userId: testMode ? 'test-user-id' : req.user.userId,
       url,
       title: aiTitle,
       description: aiDescription,
@@ -320,8 +356,20 @@ Return format:
       category
     });
     
-    await link.save();
-    res.json(link);
+    if (!testMode) {
+      await link.save();
+    }
+    
+    res.json({
+      ...link.toObject(),
+      testMode,
+      extractedData: testMode ? {
+        originalTitle: title,
+        originalDescription: description,
+        contentInfo,
+        domain: new URL(url).hostname
+      } : undefined
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

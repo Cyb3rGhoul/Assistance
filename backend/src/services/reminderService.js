@@ -28,15 +28,24 @@ export const startReminderCron = () => {
         for (const task of tasks) {
           console.log(`Processing reminder for: ${task.title} (due: ${task.reminderTime.toISOString()})`);
           
-          // Send reminder to user's email (all users get reminders now)
-          const emailSent = await sendTaskReminder(task, task.userId.email, task.userId.resendApiKey);
+          // Get full user data to access resendApiKey
+          const User = (await import('../models/User.js')).default;
+          const user = await User.findById(task.userId._id);
+          
+          if (!user || !user.resendApiKey) {
+            console.log(`Failed reminder: ${task.title} - User or Resend API key not found`);
+            continue;
+          }
+          
+          // Send reminder to user's email
+          const emailSent = await sendTaskReminder(task, user.email, user.resendApiKey);
           
           if (emailSent) {
             task.reminderSent = true;
             await task.save();
-            console.log(`Reminder sent: ${task.title}`);
+            console.log(`Reminder sent: ${task.title} to ${user.email}`);
           } else {
-            console.log(`Failed reminder: ${task.title}`);
+            console.log(`Failed reminder: ${task.title} - Email send failed`);
           }
         }
       }
@@ -52,6 +61,11 @@ export const startReminderCron = () => {
       const users = await User.find();
       
       for (const user of users) {
+        if (!user.resendApiKey) {
+          console.log(`Skipping morning summary for ${user.email} - No Resend API key`);
+          continue;
+        }
+        
         const todayStart = new Date();
         todayStart.setHours(0, 0, 0, 0);
         
@@ -67,24 +81,11 @@ export const startReminderCron = () => {
         });
         
         if (tasks.length > 0) {
-          // Send morning summary to all users
-          const tasksByUser = {};
-          tasks.forEach(task => {
-            if (!tasksByUser[task.userId.email]) {
-              tasksByUser[task.userId.email] = [];
-            }
-            tasksByUser[task.userId.email].push(task);
-          });
-          
-          // Send summary to each user
-          for (const [email, userTasks] of Object.entries(tasksByUser)) {
-            const user = await User.findOne({ email });
-            const emailSent = await sendMorningSummary(email, userTasks, user?.resendApiKey);
-            if (emailSent) {
-              console.log(`Morning summary sent to ${email}`);
-            } else {
-              console.log(`Failed morning summary to ${email}`);
-            }
+          const emailSent = await sendMorningSummary(user.email, tasks, user.resendApiKey);
+          if (emailSent) {
+            console.log(`Morning summary sent to ${user.email}`);
+          } else {
+            console.log(`Failed morning summary to ${user.email}`);
           }
         }
       }
@@ -100,6 +101,11 @@ export const startReminderCron = () => {
       const users = await User.find();
       
       for (const user of users) {
+        if (!user.resendApiKey) {
+          console.log(`Skipping evening report for ${user.email} - No Resend API key`);
+          continue;
+        }
+        
         const todayStart = new Date();
         todayStart.setHours(0, 0, 0, 0);
         

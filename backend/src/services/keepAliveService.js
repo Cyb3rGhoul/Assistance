@@ -14,29 +14,15 @@ export const startKeepAlive = () => {
 
   // Ping every 5 minutes to keep service active 24/7
   cron.schedule('*/5 * * * *', async () => {
-    const now = new Date();
-
     try {
-      // Simple health check ping
-      const response = await fetch(`${BACKEND_URL}/api/health`, {
+      // Simple health check ping - no logs to reduce spam
+      await fetch(`${BACKEND_URL}/api/health`, {
         method: 'GET',
         timeout: 5000 // 5 second timeout
       });
-
-      if (response.ok) {
-        // Log every 15 minutes to reduce spam (pings every 5 min, logs at 0, 15, 30, 45)
-        if (now.getMinutes() % 15 === 0) {
-          const istTime = now.toLocaleString('en-US', {
-            timeZone: 'Asia/Kolkata',
-            hour12: true,
-            hour: '2-digit',
-            minute: '2-digit'
-          });
-          console.log(`Keep-alive active at ${istTime} IST`);
-        }
-      }
     } catch (error) {
-      const istTime = now.toLocaleString('en-US', {
+      // Only log errors, not successful pings
+      const istTime = new Date().toLocaleString('en-US', {
         timeZone: 'Asia/Kolkata',
         hour12: true,
         hour: '2-digit',

@@ -1,6 +1,9 @@
 import { Resend } from 'resend';
 
 export async function sendTaskReminder(task, userEmail, userResendApiKey) {
+  console.log(`Attempting to send email to: ${userEmail}`);
+  console.log(`Resend API key provided: ${userResendApiKey ? 'Yes' : 'No'}`);
+  
   if (!userResendApiKey) {
     console.warn('⚠️ User Resend API key not configured. Skipping email.');
     return false;
@@ -9,7 +12,7 @@ export async function sendTaskReminder(task, userEmail, userResendApiKey) {
   const resend = new Resend(userResendApiKey);
   
   try {
-    await resend.emails.send({
+    const result = await resend.emails.send({
       from: 'ARIA Assistant <onboarding@resend.dev>',
       to: userEmail,
       subject: `⏰ Reminder: ${task.title}`,
@@ -47,9 +50,12 @@ export async function sendTaskReminder(task, userEmail, userResendApiKey) {
         </div>
       `
     });
+    
+    console.log(`Email sent successfully. ID: ${result.data?.id}`);
     return true;
   } catch (error) {
     console.error('❌ Email reminder failed:', error.message);
+    console.error('Full error:', error);
     return false;
   }
 }
