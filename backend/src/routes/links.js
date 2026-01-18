@@ -67,6 +67,13 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'URL is required' });
     }
     
+    // Get user to access their API key
+    const User = (await import('../models/User.js')).default;
+    const user = await User.findById(req.user.userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
     // Fetch page metadata
     let title = url;
     let description = '';
@@ -106,7 +113,7 @@ router.post('/', async (req, res) => {
     let category = 'General';
     
     try {
-      const apiKey = process.env.GEMINI_API_KEY;
+      const apiKey = user.getCurrentApiKey();
       if (apiKey) {
         const ai = new GoogleGenAI({ apiKey: apiKey.trim() });
         
@@ -134,7 +141,42 @@ Return format:
         autoTags = aiResult.tags || [];
       }
     } catch (aiError) {
-      // Silently handle AI categorization errors - will use manual tags only
+      console.error('AI categorization error:', aiError.message);
+      // Try backup API key if available
+      try {
+        if (user.geminiApiKey2 && user.currentApiKeyIndex === 1) {
+          const backupApiKey = user.geminiApiKey2;
+          const ai = new GoogleGenAI({ apiKey: backupApiKey.trim() });
+          
+          const prompt = `Analyze this link and return ONLY a JSON object:
+URL: ${url}
+Title: ${title}
+Description: ${description}
+
+Return format:
+{
+  "category": "one of: Technology, News, Education, Entertainment, Shopping, Social, Business, Health, Travel, Food, Sports, Finance, Design, Development, Other",
+  "tags": ["tag1", "tag2"] (max 2 relevant tags, lowercase, most important only)
+}`;
+
+          const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash-lite",
+            contents: prompt,
+          });
+          
+          const responseText = response.text.trim();
+          const cleanedResponse = responseText.replace(/```json\n?|\n?```/g, '');
+          const aiResult = JSON.parse(cleanedResponse);
+          category = aiResult.category || 'General';
+          autoTags = aiResult.tags || [];
+          
+          // Switch to backup key for future requests
+          await user.switchToBackupApiKey();
+        }
+      } catch (backupError) {
+        console.error('Backup API key also failed:', backupError.message);
+        // Silently handle AI categorization errors - will use manual tags only
+      }
     }
     
     const link = new Link({

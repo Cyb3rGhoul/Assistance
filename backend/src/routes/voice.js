@@ -681,10 +681,16 @@ Return format:
         break;
 
       case 'sendEmail':
-        const resendApiKey = process.env.RESEND_API_KEY;
+        // Get user to access their API key and email
+        const user = await User.findById(req.user.userId);
+        if (!user) {
+          throw new Error('User not found');
+        }
+        
+        const resendApiKey = user.resendApiKey;
         
         if (!resendApiKey || resendApiKey.trim() === '') {
-          throw new Error('Email service not configured. Please add RESEND_API_KEY to .env file.');
+          throw new Error('Email service not configured. Please add your Resend API key in profile settings.');
         }
 
         const resend = new Resend(resendApiKey);
@@ -747,14 +753,14 @@ Return format:
         try {
           await resend.emails.send({
             from: 'ARIA Assistant <onboarding@resend.dev>',
-            to: 'cyber.ghoul019@gmail.com',
+            to: user.email,
             subject: `[ARIA] Task Report - ${pendingTasks.length} Pending, ${completedTasks.length} Completed`,
             html: emailHtml
           });
 
           responseData.emailSent = true;
           if (!responseData.response) {
-            responseData.response = `Task list sent to your email. You have ${pendingTasks.length} pending and ${completedTasks.length} completed tasks.`;
+            responseData.response = `Task list sent to your email (${user.email}). You have ${pendingTasks.length} pending and ${completedTasks.length} completed tasks.`;
           }
         } catch (emailError) {
           console.error('Email send error:', emailError);
