@@ -15,20 +15,65 @@ export default function VoiceAssistant() {
     if (typeof window !== 'undefined' && 'webkitSpeechRecognition' in window) {
       const SpeechRecognition = (window as any).webkitSpeechRecognition;
       recognitionRef.current = new SpeechRecognition();
-      recognitionRef.current.continuous = false;
-      recognitionRef.current.interimResults = false;
+      recognitionRef.current.continuous = true; // Keep listening continuously
+      recognitionRef.current.interimResults = true; // Get interim results to show real-time speech
 
       recognitionRef.current.onresult = async (event: any) => {
-        const text = event.results[0][0].transcript;
-        setTranscript(text);
-        await processCommand(text);
+        let finalTranscript = '';
+        let interimTranscript = '';
+
+        // Process all results
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript;
+          } else {
+            interimTranscript += transcript;
+          }
+        }
+
+        // Update transcript with interim results for real-time feedback
+        setTranscript(finalTranscript + interimTranscript);
+
+        // Only process when we have final transcript and user manually stops
+        if (finalTranscript.trim() && !isListening) {
+          await processCommand(finalTranscript.trim());
+        }
       };
 
       recognitionRef.current.onend = () => {
+        // Only process if we have transcript and user manually stopped
+        if (transcript.trim()) {
+          processCommand(transcript.trim());
+        }
         setIsListening(false);
       };
+
+      recognitionRef.current.onerror = (event: any) => {
+        console.error('Speech recognition error:', event.error);
+        setIsListening(false);
+        
+        // Show user-friendly error messages
+        let errorMessage = '';
+        switch (event.error) {
+          case 'no-speech':
+            errorMessage = 'No speech detected. Please try speaking again.';
+            break;
+          case 'audio-capture':
+            errorMessage = 'Microphone access denied. Please allow microphone access.';
+            break;
+          case 'not-allowed':
+            errorMessage = 'Microphone permission denied. Please enable microphone in settings.';
+            break;
+          default:
+            errorMessage = 'Something went wrong. Please try again.';
+        }
+        
+        setResponse(errorMessage);
+        speak(errorMessage);
+      };
     }
-  }, []);
+  }, [transcript, isListening]);
 
   const toggleListening = () => {
     if (isListening) {
@@ -60,10 +105,27 @@ export default function VoiceAssistant() {
       if (!res.ok) {
         if (data.needsApiKey) {
           setResponse('Please add your Gemini API key in profile settings to use voice commands.');
+        } else if (data.error) {
+          // Better error messages for incomplete tasks
+          let errorMessage = data.error;
+          
+          if (data.error.includes('incomplete') || data.error.includes('unclear') || data.error.includes('understand')) {
+            errorMessage = 'I didn\'t understand that clearly. Please speak again with more details.';
+          } else if (data.error.includes('missing') || data.error.includes('required')) {
+            errorMessage = 'Some information is missing. Please provide complete details and try again.';
+          } else if (data.error.includes('invalid') || data.error.includes('not found')) {
+            errorMessage = 'I didn\'t recognize that command. Please try saying it differently.';
+          } else if (data.error.includes('API') || data.error.includes('key')) {
+            errorMessage = 'API key issue. Please check your API key in profile settings.';
+          }
+          
+          setResponse(errorMessage);
+          speak(errorMessage);
         } else {
-          setResponse(data.error || 'Sorry, something went wrong.');
+          const fallbackMessage = 'Something went wrong. Please try again.';
+          setResponse(fallbackMessage);
+          speak(fallbackMessage);
         }
-        speak(data.error || 'Sorry, something went wrong.');
         return;
       }
       
@@ -80,7 +142,7 @@ export default function VoiceAssistant() {
       }
     } catch (error) {
       console.error('Error:', error);
-      const errorMessage = 'Sorry, something went wrong. Please check your connection.';
+      const errorMessage = 'Connection problem. Please check your internet and try again.';
       setResponse(errorMessage);
       speak(errorMessage);
     }
@@ -163,8 +225,13 @@ export default function VoiceAssistant() {
         {/* Status */}
         <div className="text-center">
           <p className="text-xs sm:text-sm text-gray-400 font-mono">
-            {isListening ? '[ LISTENING... ]' : '[ READY ]'}
+            {isListening ? '[ LISTENING... CLICK STOP WHEN DONE ]' : '[ READY ]'}
           </p>
+          {isListening && (
+            <p className="text-[10px] sm:text-xs text-cyan-400 font-mono mt-1">
+              Click STOP button when you finish speaking
+            </p>
+          )}
         </div>
 
         {/* Transcript & Response */}
@@ -187,8 +254,13 @@ export default function VoiceAssistant() {
 
           {!transcript && !response && (
             <div className="text-center py-6 sm:py-8 border border-dashed border-zinc-800">
-              <p className="text-[10px] sm:text-xs text-gray-600 font-mono">
-                AWAITING_VOICE_INPUT
+              <p className="text-[10px] sm:text-xs text-gray-600 font-mono mb-2">
+                VOICE_COMMANDS_READY
+              </p>
+              <p className="text-[9px] sm:text-[10px] text-gray-700 font-mono">
+                • Click START and speak your command<br/>
+                • Click STOP when you finish speaking<br/>
+                • Your command will be processed
               </p>
             </div>
           )}

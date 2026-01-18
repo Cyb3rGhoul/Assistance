@@ -1,11 +1,7 @@
 import { Resend } from 'resend';
 
 export async function sendTaskReminder(task, userEmail, userResendApiKey) {
-  console.log(`Attempting to send email to: ${userEmail}`);
-  console.log(`Resend API key provided: ${userResendApiKey ? 'Yes' : 'No'}`);
-  
   if (!userResendApiKey) {
-    console.warn('⚠️ User Resend API key not configured. Skipping email.');
     return false;
   }
   
@@ -51,18 +47,20 @@ export async function sendTaskReminder(task, userEmail, userResendApiKey) {
       `
     });
     
-    console.log(`Email sent successfully. ID: ${result.data?.id}`);
+    if (!result.data?.id) {
+      console.error('Email failed: Invalid Resend API key');
+      return false;
+    }
+    
     return true;
   } catch (error) {
-    console.error('❌ Email reminder failed:', error.message);
-    console.error('Full error:', error);
+    console.error('Email failed:', error.message);
     return false;
   }
 }
 
 export async function sendMorningSummary(userEmail, tasks, userResendApiKey) {
   if (!userResendApiKey) {
-    console.warn('⚠️ User Resend API key not configured. Skipping email.');
     return false;
   }
   
@@ -107,14 +105,13 @@ export async function sendMorningSummary(userEmail, tasks, userResendApiKey) {
     });
     return true;
   } catch (error) {
-    console.error('❌ Morning summary failed:', error.message);
+    console.error('Morning summary failed:', error.message);
     return false;
   }
 }
 
 export async function sendEveningReport(userEmail, completedTasks, pendingTasks, userResendApiKey) {
   if (!userResendApiKey) {
-    console.warn('⚠️ User Resend API key not configured. Skipping email.');
     return false;
   }
   
@@ -173,7 +170,7 @@ export async function sendEveningReport(userEmail, completedTasks, pendingTasks,
     });
     return true;
   } catch (error) {
-    console.error('❌ Evening report failed:', error.message);
+    console.error('Evening report failed:', error.message);
     return false;
   }
 }

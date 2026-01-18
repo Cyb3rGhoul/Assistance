@@ -26,14 +26,11 @@ export const startReminderCron = () => {
         console.log(`Sending ${tasks.length} reminder(s)`);
         
         for (const task of tasks) {
-          console.log(`Processing reminder for: ${task.title} (due: ${task.reminderTime.toISOString()})`);
-          
           // Get full user data to access resendApiKey
           const User = (await import('../models/User.js')).default;
           const user = await User.findById(task.userId._id);
           
           if (!user || !user.resendApiKey) {
-            console.log(`Failed reminder: ${task.title} - User or Resend API key not found`);
             continue;
           }
           
@@ -43,9 +40,7 @@ export const startReminderCron = () => {
           if (emailSent) {
             task.reminderSent = true;
             await task.save();
-            console.log(`Reminder sent: ${task.title} to ${user.email}`);
-          } else {
-            console.log(`Failed reminder: ${task.title} - Email send failed`);
+            console.log(`Reminder sent: ${task.title}`);
           }
         }
       }
@@ -57,12 +52,10 @@ export const startReminderCron = () => {
   // Morning summary at 8:00 AM IST every day
   cron.schedule('30 2 * * *', async () => { // 2:30 UTC = 8:00 AM IST
     try {
-      console.log('Running morning summary...');
       const users = await User.find();
       
       for (const user of users) {
         if (!user.resendApiKey) {
-          console.log(`Skipping morning summary for ${user.email} - No Resend API key`);
           continue;
         }
         
@@ -81,12 +74,7 @@ export const startReminderCron = () => {
         });
         
         if (tasks.length > 0) {
-          const emailSent = await sendMorningSummary(user.email, tasks, user.resendApiKey);
-          if (emailSent) {
-            console.log(`Morning summary sent to ${user.email}`);
-          } else {
-            console.log(`Failed morning summary to ${user.email}`);
-          }
+          await sendMorningSummary(user.email, tasks, user.resendApiKey);
         }
       }
     } catch (error) {
@@ -97,12 +85,10 @@ export const startReminderCron = () => {
   // Evening report at 8:00 PM IST every day
   cron.schedule('30 14 * * *', async () => { // 14:30 UTC = 8:00 PM IST
     try {
-      console.log('Running evening report...');
       const users = await User.find();
       
       for (const user of users) {
         if (!user.resendApiKey) {
-          console.log(`Skipping evening report for ${user.email} - No Resend API key`);
           continue;
         }
         
@@ -124,12 +110,7 @@ export const startReminderCron = () => {
         });
         
         // Send evening report to all users
-        const emailSent = await sendEveningReport(user.email, completedTasks, pendingTasks, user.resendApiKey);
-        if (emailSent) {
-          console.log(`Evening report sent to ${user.email}`);
-        } else {
-          console.log(`Failed evening report to ${user.email}`);
-        }
+        await sendEveningReport(user.email, completedTasks, pendingTasks, user.resendApiKey);
       }
     } catch (error) {
       console.error('Evening report error:', error);

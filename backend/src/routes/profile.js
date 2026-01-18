@@ -12,7 +12,9 @@ router.get('/', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
     
-    res.json({
+    const includeKeys = req.query.includeKeys === 'true';
+    
+    const profileData = {
       id: user._id,
       email: user.email,
       name: user.name,
@@ -25,7 +27,16 @@ router.get('/', authenticateToken, async (req, res) => {
       hasResendApiKey: !!user.resendApiKey,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt
-    });
+    };
+    
+    // Include actual API keys if requested (for showing current keys)
+    if (includeKeys) {
+      profileData.currentGeminiApiKey1 = user.geminiApiKey1;
+      profileData.currentGeminiApiKey2 = user.geminiApiKey2;
+      profileData.currentResendApiKey = user.resendApiKey;
+    }
+    
+    res.json(profileData);
   } catch (error) {
     console.error('Get profile error:', error);
     res.status(500).json({ error: 'Failed to get profile' });
