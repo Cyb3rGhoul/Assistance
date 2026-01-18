@@ -19,6 +19,7 @@ interface UserProfile {
   hasApiKey1: boolean;
   hasApiKey2: boolean;
   currentApiKeyIndex: number;
+  hasResendApiKey: boolean;
   createdAt: string;
   updatedAt: string;
 }
