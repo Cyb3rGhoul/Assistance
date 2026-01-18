@@ -189,13 +189,13 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-zinc-900 border border-zinc-800 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div className="bg-zinc-900 border border-zinc-800 w-full max-w-2xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-zinc-800">
-          <h2 className="text-sm font-mono text-cyan-400">&gt; USER_PROFILE</h2>
+          <h2 className="text-sm font-mono text-cyan-400 truncate">&gt; USER_PROFILE</h2>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-red-400 transition-colors"
+            className="text-gray-500 hover:text-red-400 transition-colors flex-shrink-0 ml-2"
           >
             <X className="w-4 h-4" />
           </button>
@@ -219,13 +219,13 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="text-xs text-gray-500 mb-1 block">EMAIL</label>
-                    <p className="text-sm text-gray-300 font-mono bg-zinc-900 p-2 border border-zinc-700">
+                    <p className="text-sm text-gray-300 font-mono bg-zinc-900 p-2 border border-zinc-700 break-all overflow-hidden">
                       {profile.email}
                     </p>
                   </div>
                   <div>
                     <label className="text-xs text-gray-500 mb-1 block">ACCOUNT_TYPE</label>
-                    <p className="text-sm text-gray-300 font-mono bg-zinc-900 p-2 border border-zinc-700">
+                    <p className="text-sm text-gray-300 font-mono bg-zinc-900 p-2 border border-zinc-700 break-all overflow-hidden">
                       {profile.isOAuthUser ? 'GOOGLE_OAUTH' : 'EMAIL_PASSWORD'}
                     </p>
                   </div>
@@ -240,7 +240,7 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                     type="text"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 text-gray-300 text-sm focus:outline-none focus:border-cyan-500 font-mono"
+                    className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 text-gray-300 text-sm focus:outline-none focus:border-cyan-500 font-mono break-all overflow-hidden"
                   />
                 </div>
 
@@ -250,7 +250,7 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                     type="tel"
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 text-gray-300 text-sm focus:outline-none focus:border-cyan-500 font-mono"
+                    className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 text-gray-300 text-sm focus:outline-none focus:border-cyan-500 font-mono break-all overflow-hidden"
                     placeholder="+1234567890"
                   />
                 </div>
@@ -291,11 +291,11 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                         type="text"
                         value={formData.resendApiKey}
                         onChange={(e) => setFormData({ ...formData, resendApiKey: e.target.value })}
-                        className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 text-gray-300 text-sm focus:outline-none focus:border-cyan-500 font-mono"
+                        className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 text-gray-300 text-sm focus:outline-none focus:border-cyan-500 font-mono break-all overflow-hidden"
                         placeholder="Enter new Resend API key"
                       />
                     ) : (
-                      <div className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 text-gray-300 text-sm font-mono">
+                      <div className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 text-gray-300 text-sm font-mono break-all overflow-hidden">
                         {profile.hasResendApiKey ? '••••••••••••••••••••••••••••••••' : 'NOT_SET'}
                       </div>
                     )}
@@ -348,11 +348,11 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                         type="text"
                         value={formData.geminiApiKey1}
                         onChange={(e) => setFormData({ ...formData, geminiApiKey1: e.target.value })}
-                        className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 text-gray-300 text-sm focus:outline-none focus:border-cyan-500 font-mono"
+                        className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 text-gray-300 text-sm focus:outline-none focus:border-cyan-500 font-mono break-all overflow-hidden"
                         placeholder="Enter new primary Gemini API key"
                       />
                     ) : (
-                      <div className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 text-gray-300 text-sm font-mono">
+                      <div className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 text-gray-300 text-sm font-mono break-all overflow-hidden">
                         {profile.hasApiKey1 ? '••••••••••••••••••••••••••••••••••••••••' : 'NOT_SET'}
                       </div>
                     )}
@@ -381,11 +381,11 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                         type="text"
                         value={formData.geminiApiKey2}
                         onChange={(e) => setFormData({ ...formData, geminiApiKey2: e.target.value })}
-                        className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 text-gray-300 text-sm focus:outline-none focus:border-cyan-500 font-mono"
+                        className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 text-gray-300 text-sm focus:outline-none focus:border-cyan-500 font-mono break-all overflow-hidden"
                         placeholder="Enter new backup Gemini API key"
                       />
                     ) : (
-                      <div className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 text-gray-300 text-sm font-mono">
+                      <div className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 text-gray-300 text-sm font-mono break-all overflow-hidden">
                         {profile.hasApiKey2 ? '••••••••••••••••••••••••••••••••••••••••' : 'NOT_SET'}
                       </div>
                     )}
