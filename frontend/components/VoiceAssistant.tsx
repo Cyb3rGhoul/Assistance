@@ -10,13 +10,15 @@ export default function VoiceAssistant() {
   const [response, setResponse] = useState('');
   const [isSpeaking, setIsSpeaking] = useState(false);
   const recognitionRef = useRef<any>(null);
+  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastSpeechTimeRef = useRef<number>(0);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && 'webkitSpeechRecognition' in window) {
       const SpeechRecognition = (window as any).webkitSpeechRecognition;
       recognitionRef.current = new SpeechRecognition();
       recognitionRef.current.continuous = true; // Keep listening continuously
-      recognitionRef.current.interimResults = true; // Get interim results to show real-time speech
+      recognitionRef.current.interimResults = true; // Get interim results to detect speech
 
       recognitionRef.current.onresult = async (event: any) => {
         let finalTranscript = '';
@@ -35,23 +37,60 @@ export default function VoiceAssistant() {
         // Update transcript with interim results for real-time feedback
         setTranscript(finalTranscript + interimTranscript);
 
-        // Only process when we have final transcript and user manually stops
-        if (finalTranscript.trim() && !isListening) {
+        // If we have speech (interim or final), reset the silence timer
+        if (finalTranscript || interimTranscript) {
+          lastSpeechTimeRef.current = Date.now();
+          
+          // Clear existing timer
+          if (silenceTimerRef.current) {
+            clearTimeout(silenceTimerRef.current);
+          }
+
+          // Set new timer for 10 seconds of silence
+          silenceTimerRef.current = setTimeout(() => {
+            if (recognitionRef.current && isListening) {
+              recognitionRef.current.stop();
+            }
+          }, 10000); // 10 seconds
+        }
+
+        // Process final transcript
+        if (finalTranscript.trim()) {
+          // Clear the timer since we're processing
+          if (silenceTimerRef.current) {
+            clearTimeout(silenceTimerRef.current);
+          }
+          
+          setTranscript(finalTranscript.trim());
+          recognitionRef.current.stop();
           await processCommand(finalTranscript.trim());
         }
       };
 
+      recognitionRef.current.onstart = () => {
+        lastSpeechTimeRef.current = Date.now();
+        // Set initial silence timer for 10 seconds
+        silenceTimerRef.current = setTimeout(() => {
+          if (recognitionRef.current && isListening) {
+            recognitionRef.current.stop();
+          }
+        }, 10000); // 10 seconds
+      };
+
       recognitionRef.current.onend = () => {
-        // Only process if we have transcript and user manually stopped
-        if (transcript.trim()) {
-          processCommand(transcript.trim());
-        }
         setIsListening(false);
+        // Clear any remaining timers
+        if (silenceTimerRef.current) {
+          clearTimeout(silenceTimerRef.current);
+        }
       };
 
       recognitionRef.current.onerror = (event: any) => {
         console.error('Speech recognition error:', event.error);
         setIsListening(false);
+        if (silenceTimerRef.current) {
+          clearTimeout(silenceTimerRef.current);
+        }
         
         // Show user-friendly error messages
         let errorMessage = '';
@@ -73,10 +112,21 @@ export default function VoiceAssistant() {
         speak(errorMessage);
       };
     }
-  }, [transcript, isListening]);
+
+    // Cleanup function
+    return () => {
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+      }
+    };
+  }, [isListening]);
 
   const toggleListening = () => {
     if (isListening) {
+      // Clear any existing timers
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+      }
       recognitionRef.current?.stop();
       setIsListening(false);
     } else {
@@ -225,11 +275,11 @@ export default function VoiceAssistant() {
         {/* Status */}
         <div className="text-center">
           <p className="text-xs sm:text-sm text-gray-400 font-mono">
-            {isListening ? '[ LISTENING... CLICK STOP WHEN DONE ]' : '[ READY ]'}
+            {isListening ? '[ LISTENING... AUTO-STOPS AFTER 10s SILENCE ]' : '[ READY ]'}
           </p>
           {isListening && (
             <p className="text-[10px] sm:text-xs text-cyan-400 font-mono mt-1">
-              Click STOP button when you finish speaking
+              Click STOP to end manually or wait 10s of silence
             </p>
           )}
         </div>
@@ -259,8 +309,8 @@ export default function VoiceAssistant() {
               </p>
               <p className="text-[9px] sm:text-[10px] text-gray-700 font-mono">
                 • Click START and speak your command<br/>
-                • Click STOP when you finish speaking<br/>
-                • Your command will be processed
+                • Auto-stops after 10 seconds of silence<br/>
+                • Or click STOP to end manually
               </p>
             </div>
           )}
