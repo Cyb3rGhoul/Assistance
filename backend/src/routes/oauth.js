@@ -6,6 +6,19 @@ import User from '../models/User.js';
 
 const router = express.Router();
 
+// In-memory store for OAuth states (in production, use Redis or database)
+const stateStore = new Map();
+
+// Clean up expired states every 10 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [state, data] of stateStore.entries()) {
+    if (now - data.timestamp > 10 * 60 * 1000) { // 10 minutes
+      stateStore.delete(state);
+    }
+  }
+}, 10 * 60 * 1000);
+
 // Helper function to get OAuth2 client
 const getOAuth2Client = () => {
   return new google.auth.OAuth2(
@@ -27,7 +40,12 @@ router.get('/google', (req, res) => {
 
     const oauth2Client = getOAuth2Client();
     const state = crypto.randomBytes(32).toString('hex');
-    req.session.state = state;
+    
+    // Store state with timestamp
+    stateStore.set(state, {
+      timestamp: Date.now(),
+      used: false
+    });
     
     const url = oauth2Client.generateAuthUrl({
       access_type: 'offline',
@@ -51,9 +69,14 @@ router.get('/google/callback', async (req, res) => {
     const { code, state } = req.query;
     
     // Verify state to prevent CSRF attacks
-    if (state !== req.session.state) {
-      return res.status(403).json({ error: 'State mismatch. Possible CSRF attack.' });
+    const stateData = stateStore.get(state);
+    if (!stateData || stateData.used || Date.now() - stateData.timestamp > 10 * 60 * 1000) {
+      console.error('State verification failed:', { state, stateData });
+      return res.redirect(`${process.env.FRONTEND_URL}/login?error=state_mismatch`);
     }
+    
+    // Mark state as used and remove it
+    stateStore.delete(state);
     
     const oauth2Client = getOAuth2Client();
     
@@ -85,32 +108,33 @@ router.get('/google/callback', async (req, res) => {
         user.profilePicture = data.picture;
         await user.save();
       }
-    } else {
-      // Create new user - redirect to signup with Google data
-      req.session.googleUserData = {
-        googleId: data.id,
-        email: data.email,
-        name: data.name,
-        profilePicture: data.picture
-      };
       
-      // Redirect to frontend signup page with Google data
-      return res.redirect(`${process.env.FRONTEND_URL}/signup?oauth=google&email=${encodeURIComponent(data.email)}&name=${encodeURIComponent(data.name)}`);
+      // Generate JWT token
+      const token = jwt.sign(
+        { userId: user._id, email: user.email },
+        process.env.JWT_SECRET,
+        { expiresIn: '7d' }
+      );
+      
+      // Redirect to frontend with token
+      return res.redirect(`${process.env.FRONTEND_URL}/login?token=${token}&success=true`);
+    } else {
+      // Create temporary token for signup process
+      const tempToken = jwt.sign(
+        { 
+          googleId: data.id,
+          email: data.email,
+          name: data.name,
+          profilePicture: data.picture,
+          temp: true
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: '10m' } // Short expiry for temp token
+      );
+      
+      // Redirect to frontend signup page with temp token
+      return res.redirect(`${process.env.FRONTEND_URL}/signup?oauth=google&token=${tempToken}&email=${encodeURIComponent(data.email)}&name=${encodeURIComponent(data.name)}`);
     }
-    
-    // Generate JWT token
-    const token = jwt.sign(
-      { userId: user._id, email: user.email },
-      process.env.JWT_SECRET,
-      { expiresIn: '7d' }
-    );
-    
-    // Clear session data
-    delete req.session.state;
-    delete req.session.googleUserData;
-    
-    // Redirect to frontend with token
-    res.redirect(`${process.env.FRONTEND_URL}/login?token=${token}&success=true`);
     
   } catch (error) {
     console.error('OAuth callback error:', error);
@@ -122,16 +146,40 @@ router.get('/google/callback', async (req, res) => {
 router.post('/google/complete-signup', async (req, res) => {
   try {
     const { geminiApiKey } = req.body;
+    const authHeader = req.headers.authorization;
     
-    if (!req.session.googleUserData) {
-      return res.status(400).json({ error: 'No Google user data found. Please restart the OAuth process.' });
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'No authorization token provided' });
+    }
+    
+    const tempToken = authHeader.split(' ')[1];
+    
+    // Verify temp token
+    let googleData;
+    try {
+      googleData = jwt.verify(tempToken, process.env.JWT_SECRET);
+      if (!googleData.temp) {
+        return res.status(400).json({ error: 'Invalid token type' });
+      }
+    } catch (error) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
     }
     
     if (!geminiApiKey) {
       return res.status(400).json({ error: 'Gemini API key is required' });
     }
     
-    const googleData = req.session.googleUserData;
+    // Check if user already exists
+    const existingUser = await User.findOne({ 
+      $or: [
+        { googleId: googleData.googleId },
+        { email: googleData.email }
+      ]
+    });
+    
+    if (existingUser) {
+      return res.status(400).json({ error: 'User already exists' });
+    }
     
     // Create new user with Google OAuth data
     const user = new User({
@@ -152,9 +200,6 @@ router.post('/google/complete-signup', async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
-    
-    // Clear session data
-    delete req.session.googleUserData;
     
     res.json({
       token,
@@ -180,7 +225,8 @@ router.get('/debug', (req, res) => {
     hasClientSecret: !!process.env.GOOGLE_CLIENT_SECRET,
     hasRedirectUrl: !!process.env.GOOGLE_REDIRECT_URL,
     redirectUrl: process.env.GOOGLE_REDIRECT_URL,
-    clientIdPrefix: process.env.GOOGLE_CLIENT_ID ? process.env.GOOGLE_CLIENT_ID.substring(0, 10) + '...' : 'NOT_SET'
+    clientIdPrefix: process.env.GOOGLE_CLIENT_ID ? process.env.GOOGLE_CLIENT_ID.substring(0, 10) + '...' : 'NOT_SET',
+    stateStoreSize: stateStore.size
   });
 });
 

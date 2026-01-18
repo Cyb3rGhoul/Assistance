@@ -24,8 +24,12 @@ function SignupForm() {
     const isOAuth = searchParams.get('oauth') === 'google';
     const email = searchParams.get('email');
     const name = searchParams.get('name');
+    const token = searchParams.get('token');
 
-    if (isOAuth && email && name) {
+    if (isOAuth && email && name && token) {
+      // Store the temp token for the API call
+      localStorage.setItem('tempToken', token);
+      
       setUserInfo({
         email: decodeURIComponent(email),
         name: decodeURIComponent(name),
@@ -48,10 +52,19 @@ function SignupForm() {
     }
 
     try {
+      const tempToken = localStorage.getItem('tempToken');
+      if (!tempToken) {
+        setError('Session expired. Please try again.');
+        setIsLoading(false);
+        return;
+      }
+
       const res = await fetch(api.endpoints.oauth.completeSignup, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${tempToken}`
+        },
         body: JSON.stringify({
           geminiApiKey: formData.geminiApiKey.trim(),
         }),
@@ -60,6 +73,7 @@ function SignupForm() {
       const data = await res.json();
 
       if (res.ok) {
+        localStorage.removeItem('tempToken'); // Clean up temp token
         localStorage.setItem('token', data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
         router.push('/');

@@ -1,7 +1,6 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import session from 'express-session';
 import mongoose from 'mongoose';
 import authRoutes from './routes/auth.js';
 import oauthRoutes from './routes/oauth.js';
@@ -18,20 +17,9 @@ const app = express();
 
 app.use(cors({ 
   origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-  credentials: true // Allow credentials for session cookies
+  credentials: true
 }));
 app.use(express.json());
-
-// Session middleware for OAuth
-app.use(session({
-  secret: process.env.JWT_SECRET || 'fallback-secret',
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    secure: process.env.NODE_ENV === 'production', // HTTPS in production
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
-  }
-}));
 
 // Routes
 app.use('/api/auth', authRoutes);
