@@ -17,6 +17,9 @@ const userSchema = new mongoose.Schema({
   geminiApiKey2: { type: String }, // Secondary API key for failover (optional)
   currentApiKeyIndex: { type: Number, default: 1 }, // 1 for primary, 2 for secondary
   
+  // Resend API key for email notifications (REQUIRED for all users)
+  resendApiKey: { type: String, required: true },
+  
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });

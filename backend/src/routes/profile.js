@@ -22,6 +22,7 @@ router.get('/', authenticateToken, async (req, res) => {
       hasApiKey1: !!user.geminiApiKey1,
       hasApiKey2: !!user.geminiApiKey2,
       currentApiKeyIndex: user.currentApiKeyIndex,
+      hasResendApiKey: !!user.resendApiKey,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt
     });
@@ -34,7 +35,7 @@ router.get('/', authenticateToken, async (req, res) => {
 // Update user profile
 router.put('/', authenticateToken, async (req, res) => {
   try {
-    const { name, phone, geminiApiKey1, geminiApiKey2 } = req.body;
+    const { name, phone, geminiApiKey1, geminiApiKey2, resendApiKey } = req.body;
     
     const user = await User.findById(req.user.userId);
     if (!user) {
@@ -44,6 +45,14 @@ router.put('/', authenticateToken, async (req, res) => {
     // Update basic info
     if (name) user.name = name;
     if (phone !== undefined) user.phone = phone;
+    
+    // Update Resend API key
+    if (resendApiKey !== undefined) {
+      if (!resendApiKey.trim()) {
+        return res.status(400).json({ error: 'Resend API key is required for email notifications' });
+      }
+      user.resendApiKey = resendApiKey.trim();
+    }
     
     // Update API keys
     if (geminiApiKey1 !== undefined) {
@@ -81,6 +90,7 @@ router.put('/', authenticateToken, async (req, res) => {
         hasApiKey1: !!user.geminiApiKey1,
         hasApiKey2: !!user.geminiApiKey2,
         currentApiKeyIndex: user.currentApiKeyIndex,
+        hasResendApiKey: !!user.resendApiKey,
         updatedAt: user.updatedAt
       }
     });

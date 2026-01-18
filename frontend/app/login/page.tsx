@@ -7,7 +7,7 @@ import GoogleOAuthButton from '@/components/GoogleOAuthButton';
 
 function LoginForm() {
   const [isLogin, setIsLogin] = useState(true);
-  const [formData, setFormData] = useState({ email: '', password: '', name: '', geminiApiKey: '' });
+  const [formData, setFormData] = useState({ email: '', password: '', name: '', geminiApiKey: '', resendApiKey: '' });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const router = useRouter();
@@ -170,6 +170,31 @@ function LoginForm() {
             </div>
           )}
 
+          {!isLogin && (
+            <div>
+              <label className="text-[10px] sm:text-xs text-gray-500 mb-1 block">&gt; RESEND_API_KEY *</label>
+              <input
+                type="password"
+                value={formData.resendApiKey}
+                onChange={(e) => setFormData({ ...formData, resendApiKey: e.target.value })}
+                className="w-full px-3 py-2.5 sm:py-2 bg-zinc-800 border border-zinc-700 text-gray-300 text-sm focus:outline-none focus:border-cyan-500 font-mono"
+                placeholder="re_..."
+                required
+              />
+              <p className="text-[10px] text-gray-600 mt-1 font-mono">
+                Get your API key from: 
+                <a 
+                  href="https://resend.com/api-keys" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-cyan-400 hover:text-cyan-300 ml-1"
+                >
+                  resend.com/api-keys
+                </a>
+              </p>
+            </div>
+          )}
+
           {error && (
             <p className="text-red-400 text-[10px] sm:text-xs font-mono border border-red-900 bg-red-950/20 p-2 break-words">
               ERROR: {error}
@@ -198,6 +223,7 @@ function LoginForm() {
               <li>• Personal API key usage</li>
               <li>• Full voice features</li>
               <li>• Backup API key support</li>
+              <li>• Personal email notifications</li>
             </ul>
           </div>
         )}

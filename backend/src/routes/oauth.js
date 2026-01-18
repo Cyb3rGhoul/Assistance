@@ -145,7 +145,7 @@ router.get('/google/callback', async (req, res) => {
 // Complete OAuth signup with API key
 router.post('/google/complete-signup', async (req, res) => {
   try {
-    const { geminiApiKey } = req.body;
+    const { geminiApiKey, resendApiKey } = req.body;
     const authHeader = req.headers.authorization;
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -169,6 +169,10 @@ router.post('/google/complete-signup', async (req, res) => {
       return res.status(400).json({ error: 'Gemini API key is required' });
     }
     
+    if (!resendApiKey) {
+      return res.status(400).json({ error: 'Resend API key is required for email notifications' });
+    }
+    
     // Check if user already exists
     const existingUser = await User.findOne({ 
       $or: [
@@ -189,6 +193,7 @@ router.post('/google/complete-signup', async (req, res) => {
       profilePicture: googleData.profilePicture,
       isOAuthUser: true,
       geminiApiKey1: geminiApiKey,
+      resendApiKey: resendApiKey,
       currentApiKeyIndex: 1
     });
     

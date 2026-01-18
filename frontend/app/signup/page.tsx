@@ -8,6 +8,7 @@ import { Key, ArrowLeft } from 'lucide-react';
 function SignupForm() {
   const [formData, setFormData] = useState({
     geminiApiKey: '',
+    resendApiKey: '',
   });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -51,6 +52,12 @@ function SignupForm() {
       return;
     }
 
+    if (!formData.resendApiKey.trim()) {
+      setError('Resend API key is required');
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const tempToken = localStorage.getItem('tempToken');
       if (!tempToken) {
@@ -67,6 +74,7 @@ function SignupForm() {
         },
         body: JSON.stringify({
           geminiApiKey: formData.geminiApiKey.trim(),
+          resendApiKey: formData.resendApiKey.trim(),
         }),
       });
 
@@ -156,6 +164,32 @@ function SignupForm() {
             </p>
           </div>
 
+          <div>
+            <label className="text-[10px] sm:text-xs text-gray-500 mb-2 block flex items-center gap-2">
+              <Key className="w-3 h-3" />
+              RESEND_API_KEY *
+            </label>
+            <input
+              type="password"
+              value={formData.resendApiKey}
+              onChange={(e) => setFormData({ ...formData, resendApiKey: e.target.value })}
+              className="w-full px-3 py-2.5 sm:py-2 bg-zinc-800 border border-zinc-700 text-gray-300 text-sm focus:outline-none focus:border-cyan-500 font-mono"
+              placeholder="re_..."
+              required
+            />
+            <p className="text-[10px] text-gray-600 mt-1 font-mono">
+              Get your API key from: 
+              <a 
+                href="https://resend.com/api-keys" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-cyan-400 hover:text-cyan-300 ml-1"
+              >
+                resend.com/api-keys
+              </a>
+            </p>
+          </div>
+
           {error && (
             <p className="text-red-400 text-[10px] sm:text-xs font-mono border border-red-900 bg-red-950/20 p-2 break-words">
               ERROR: {error}
@@ -169,6 +203,7 @@ function SignupForm() {
               <li>• Email reminders for your tasks</li>
               <li>• Link categorization & search</li>
               <li>• Backup key support for failover</li>
+              <li>• Personal email notifications</li>
             </ul>
           </div>
 
