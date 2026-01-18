@@ -9,6 +9,7 @@ export default function VoiceAssistant() {
   const [transcript, setTranscript] = useState('');
   const [response, setResponse] = useState('');
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const recognitionRef = useRef<any>(null);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastSpeechTimeRef = useRef<number>(0);
@@ -55,7 +56,7 @@ export default function VoiceAssistant() {
         }
 
         // Process final transcript
-        if (finalTranscript.trim()) {
+        if (finalTranscript.trim() && !isProcessing) {
           // Clear the timer since we're processing
           if (silenceTimerRef.current) {
             clearTimeout(silenceTimerRef.current);
@@ -82,6 +83,11 @@ export default function VoiceAssistant() {
         // Clear any remaining timers
         if (silenceTimerRef.current) {
           clearTimeout(silenceTimerRef.current);
+        }
+        
+        // Process transcript if we have one and not already processing
+        if (transcript.trim() && !isProcessing) {
+          processCommand(transcript.trim());
         }
       };
 
@@ -130,6 +136,9 @@ export default function VoiceAssistant() {
       recognitionRef.current?.stop();
       setIsListening(false);
     } else {
+      // Don't start if already processing
+      if (isProcessing) return;
+      
       recognitionRef.current?.start();
       setIsListening(true);
       setTranscript('');
@@ -138,6 +147,11 @@ export default function VoiceAssistant() {
   };
 
   const processCommand = async (command: string) => {
+    // Prevent multiple simultaneous processing
+    if (isProcessing) return;
+    
+    setIsProcessing(true);
+    
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(api.endpoints.voice.process, {
@@ -154,7 +168,9 @@ export default function VoiceAssistant() {
       // Handle API key errors
       if (!res.ok) {
         if (data.needsApiKey) {
-          setResponse('Please add your Gemini API key in profile settings to use voice commands.');
+          const apiKeyMessage = 'Please add your Gemini API key in profile settings to use voice commands.';
+          setResponse(apiKeyMessage);
+          speak(apiKeyMessage);
         } else if (data.error) {
           // Better error messages for incomplete tasks
           let errorMessage = data.error;
@@ -195,6 +211,8 @@ export default function VoiceAssistant() {
       const errorMessage = 'Connection problem. Please check your internet and try again.';
       setResponse(errorMessage);
       speak(errorMessage);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -252,7 +270,8 @@ export default function VoiceAssistant() {
         <div className="relative">
           <button
             onClick={toggleListening}
-            className={`w-20 h-20 sm:w-24 sm:h-24 border-2 flex items-center justify-center transition-all duration-200 active:scale-95 ${
+            disabled={isProcessing}
+            className={`w-20 h-20 sm:w-24 sm:h-24 border-2 flex items-center justify-center transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${
               isListening
                 ? 'border-red-500 bg-red-500/10 text-red-400'
                 : 'border-cyan-500 bg-cyan-500/5 text-cyan-400 hover:bg-cyan-500/10'
@@ -270,17 +289,32 @@ export default function VoiceAssistant() {
               <Volume2 className="w-3 h-3 sm:w-4 sm:h-4 text-black" />
             </div>
           )}
+          
+          {isProcessing && (
+            <div className="absolute -top-2 -left-2 bg-gradient-to-r from-cyan-500 to-blue-500 p-1.5 rounded-full">
+              <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          )}
         </div>
 
         {/* Status */}
         <div className="text-center">
           <p className="text-xs sm:text-sm text-gray-400 font-mono">
-            {isListening ? '[ LISTENING... AUTO-STOPS AFTER 10s SILENCE ]' : '[ READY ]'}
+            {isProcessing ? '[ PROCESSING COMMAND... ]' : isListening ? '[ LISTENING... AUTO-STOPS AFTER 10s SILENCE ]' : '[ READY ]'}
           </p>
-          {isListening && (
+          {isListening && !isProcessing && (
             <p className="text-[10px] sm:text-xs text-cyan-400 font-mono mt-1">
               Click STOP to end manually or wait 10s of silence
             </p>
+          )}
+          {isProcessing && (
+            <div className="flex items-center justify-center mt-2">
+              <div className="flex space-x-1">
+                <div className="w-2 h-2 bg-cyan-400 rounded-full animate-pulse"></div>
+                <div className="w-2 h-2 bg-cyan-400 rounded-full animate-pulse" style={{animationDelay: '0.2s'}}></div>
+                <div className="w-2 h-2 bg-cyan-400 rounded-full animate-pulse" style={{animationDelay: '0.4s'}}></div>
+              </div>
+            </div>
           )}
         </div>
 

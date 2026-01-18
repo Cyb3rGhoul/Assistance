@@ -227,7 +227,9 @@ IMPORTANT RULES:
 - Parse dates naturally in IST: "today 6pm" = today at 18:00 IST, "tomorrow 5pm" = tomorrow at 17:00 IST
 - When providing ISO dates, calculate the correct UTC time that represents the IST time
 - For example: "2:35 PM IST today" should be converted to UTC and provided as ISO string
-- Convert 12-hour to 24-hour format: 6pm = 18:00, 6am = 06:00
+- Convert 12-hour to 24-hour format: 6pm = 18:00, 6am = 06:00, 10:00 a.m. = 10:00, 10:00 p.m. = 22:00
+- For time-only updates (like "edit time to 10:00 a.m."), set both dueDate and reminderTime to today at that time
+- When user says "edit time" or "change time", they usually mean the reminder time
 
 Examples:
 - "remind me to buy groceries tomorrow at 5pm" → action: create
@@ -404,7 +406,23 @@ Return format:
         responseData.taskUpdated = updatedTask;
         if (!responseData.response) {
           const updatedFields = Object.keys(updateData).filter(k => k !== 'updatedAt');
-          responseData.response = `Updated task "${updatedTask.title}": ${updatedFields.join(', ')}`;
+          let responseText = `Updated task "${updatedTask.title}": `;
+          
+          // Show specific field updates with values
+          const fieldDescriptions = [];
+          if (updateData.title) fieldDescriptions.push(`title to "${updateData.title}"`);
+          if (updateData.description !== undefined) fieldDescriptions.push(`description to "${updateData.description || 'none'}"`);
+          if (updateData.dueDate !== undefined) {
+            const dueDateIST = updateData.dueDate ? new Date(updateData.dueDate.getTime() + 5.5 * 60 * 60 * 1000) : null;
+            fieldDescriptions.push(`due date to ${dueDateIST ? dueDateIST.toLocaleString('en-US', { timeZone: 'Asia/Kolkata', hour12: true }) + ' IST' : 'none'}`);
+          }
+          if (updateData.reminderTime !== undefined) {
+            const reminderIST = updateData.reminderTime ? new Date(updateData.reminderTime.getTime() + 5.5 * 60 * 60 * 1000) : null;
+            fieldDescriptions.push(`reminder time to ${reminderIST ? reminderIST.toLocaleString('en-US', { timeZone: 'Asia/Kolkata', hour12: true }) + ' IST' : 'none'}`);
+          }
+          
+          responseText += fieldDescriptions.join(', ');
+          responseData.response = responseText;
         }
         break;
 
