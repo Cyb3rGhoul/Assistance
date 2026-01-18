@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Link as LinkIcon, ExternalLink, Trash2, Tag, Search, Filter, Plus, Mic, MicOff } from 'lucide-react';
+import { Link as LinkIcon, ExternalLink, Trash2, Tag, Search, Filter, Plus, Mic, MicOff, Edit3 } from 'lucide-react';
 import api from '@/lib/api';
 
 interface Link {
@@ -21,6 +21,159 @@ interface Metadata {
   allTags: string[];
 }
 
+interface EditLinkFormProps {
+  link: Link;
+  onSave: (data: { title: string; description: string; userTags: string[] }) => void;
+  onCancel: () => void;
+}
+
+function EditLinkForm({ link, onSave, onCancel }: EditLinkFormProps) {
+  const [title, setTitle] = useState(link.title);
+  const [description, setDescription] = useState(link.description || '');
+  const [userTags, setUserTags] = useState<string[]>(link.userTags);
+  const [newTag, setNewTag] = useState('');
+
+  const handleAddTag = () => {
+    const tag = newTag.trim();
+    if (tag && !userTags.includes(tag)) {
+      setUserTags([...userTags, tag]);
+      setNewTag('');
+    }
+  };
+
+  const handleRemoveTag = (tagToRemove: string) => {
+    setUserTags(userTags.filter(tag => tag !== tagToRemove));
+  };
+
+  const handleSave = () => {
+    onSave({
+      title: title.trim(),
+      description: description.trim(),
+      userTags
+    });
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* URL (read-only) */}
+      <div>
+        <label className="block text-xs text-gray-400 font-mono mb-1">URL</label>
+        <div className="px-3 py-2 bg-zinc-800 border border-zinc-700 text-gray-500 text-xs font-mono break-all">
+          {link.url}
+        </div>
+      </div>
+
+      {/* Title */}
+      <div>
+        <label className="block text-xs text-gray-400 font-mono mb-1">TITLE</label>
+        <input
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 text-gray-300 text-xs font-mono focus:outline-none focus:border-cyan-500"
+          placeholder="Enter title..."
+        />
+      </div>
+
+      {/* Description */}
+      <div>
+        <label className="block text-xs text-gray-400 font-mono mb-1">DESCRIPTION</label>
+        <textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          rows={3}
+          className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 text-gray-300 text-xs font-mono focus:outline-none focus:border-cyan-500 resize-none"
+          placeholder="Enter description..."
+        />
+      </div>
+
+      {/* Auto Tags (read-only) */}
+      {link.autoTags.length > 0 && (
+        <div>
+          <label className="block text-xs text-gray-400 font-mono mb-1">AUTO_TAGS</label>
+          <div className="flex flex-wrap gap-1">
+            {link.autoTags.map((tag, index) => (
+              <span
+                key={index}
+                className="bg-green-500/20 text-green-400 px-2 py-0.5 text-[10px] font-mono flex items-center gap-1"
+              >
+                <Tag className="w-2 h-2" />
+                {tag}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* User Tags */}
+      <div>
+        <label className="block text-xs text-gray-400 font-mono mb-1">USER_TAGS</label>
+        
+        {/* Existing tags */}
+        {userTags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-2">
+            {userTags.map((tag, index) => (
+              <span
+                key={index}
+                className="bg-purple-500/20 text-purple-400 px-2 py-0.5 text-[10px] font-mono flex items-center gap-1"
+              >
+                <Tag className="w-2 h-2" />
+                {tag}
+                <button
+                  onClick={() => handleRemoveTag(tag)}
+                  className="text-purple-300 hover:text-red-400 ml-1"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Add new tag */}
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={newTag}
+            onChange={(e) => setNewTag(e.target.value)}
+            onKeyPress={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleAddTag();
+              }
+            }}
+            className="flex-1 px-2 py-1 bg-zinc-700 border border-zinc-600 text-gray-300 text-[10px] font-mono focus:outline-none focus:border-cyan-500"
+            placeholder="Add tag..."
+          />
+          <button
+            onClick={handleAddTag}
+            disabled={!newTag.trim()}
+            className="px-2 py-1 bg-cyan-500/20 border border-cyan-500/30 text-cyan-400 text-[10px] font-mono hover:bg-cyan-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            ADD
+          </button>
+        </div>
+      </div>
+
+      {/* Action buttons */}
+      <div className="flex gap-3 pt-2">
+        <button
+          onClick={onCancel}
+          className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-gray-300 px-4 py-2 text-xs font-mono border border-zinc-700 transition-colors"
+        >
+          CANCEL
+        </button>
+        <button
+          onClick={handleSave}
+          className="flex-1 bg-cyan-900 hover:bg-cyan-800 text-cyan-100 px-4 py-2 text-xs font-mono border border-cyan-700 transition-colors"
+        >
+          SAVE
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function LinksManager() {
   const [links, setLinks] = useState<Link[]>([]);
   const [metadata, setMetadata] = useState<Metadata>({ categories: [], allTags: [] });
@@ -32,6 +185,13 @@ export default function LinksManager() {
   const [isListening, setIsListening] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
+    isOpen: boolean;
+    link: Link | null;
+  }>({
+    isOpen: false,
+    link: null
+  });
+  const [editModal, setEditModal] = useState<{
     isOpen: boolean;
     link: Link | null;
   }>({
@@ -148,6 +308,10 @@ export default function LinksManager() {
     setDeleteConfirmation({ isOpen: true, link });
   };
 
+  const showEditModal = (link: Link) => {
+    setEditModal({ isOpen: true, link });
+  };
+
   const handleConfirmDelete = () => {
     if (deleteConfirmation.link) {
       deleteLink(deleteConfirmation.link._id);
@@ -156,6 +320,32 @@ export default function LinksManager() {
 
   const handleCancelDelete = () => {
     setDeleteConfirmation({ isOpen: false, link: null });
+  };
+
+  const handleEditSave = async (updatedData: { title: string; description: string; userTags: string[] }) => {
+    if (!editModal.link) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      await fetch(api.endpoints.links.update(editModal.link._id), {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(updatedData)
+      });
+
+      await fetchLinks();
+      await fetchMetadata();
+      setEditModal({ isOpen: false, link: null });
+    } catch (error) {
+      console.error('Error updating link:', error);
+    }
+  };
+
+  const handleEditCancel = () => {
+    setEditModal({ isOpen: false, link: null });
   };
 
   const addUserTag = async (linkId: string, tag: string) => {
@@ -360,12 +550,20 @@ export default function LinksManager() {
                       </a>
                     </div>
                     
-                    <button
-                      onClick={() => showDeleteConfirmation(link)}
-                      className="text-red-500 hover:text-red-400 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
-                    </button>
+                    <div className="flex items-center gap-2 sm:gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => showEditModal(link)}
+                        className="text-cyan-500 hover:text-cyan-400 flex-shrink-0 active:scale-90 transition-transform p-2 sm:p-1"
+                      >
+                        <Edit3 className="w-4 h-4 sm:w-4 sm:h-4" />
+                      </button>
+                      <button
+                        onClick={() => showDeleteConfirmation(link)}
+                        className="text-red-500 hover:text-red-400 flex-shrink-0 active:scale-90 transition-transform p-2 sm:p-1"
+                      >
+                        <Trash2 className="w-4 h-4 sm:w-4 sm:h-4" />
+                      </button>
+                    </div>
                   </div>
 
                   {/* Description */}
@@ -472,6 +670,32 @@ export default function LinksManager() {
                 DELETE
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Link Modal */}
+      {editModal.isOpen && editModal.link && (
+        <div 
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          onClick={(e) => e.target === e.currentTarget && handleEditCancel()}
+        >
+          <div 
+            className="bg-zinc-900 border border-zinc-800 p-6 max-w-md w-full max-h-[90vh] overflow-y-auto"
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') handleEditCancel();
+            }}
+            tabIndex={-1}
+          >
+            <div className="border-b border-zinc-800 pb-3 mb-4">
+              <p className="text-[10px] text-gray-500 tracking-wider">&gt; EDIT_LINK</p>
+            </div>
+            
+            <EditLinkForm
+              link={editModal.link}
+              onSave={handleEditSave}
+              onCancel={handleEditCancel}
+            />
           </div>
         </div>
       )}

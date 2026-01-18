@@ -5,27 +5,61 @@ import { useRouter } from 'next/navigation';
 import VoiceAssistant from '@/components/VoiceAssistant';
 import TaskList from '@/components/TaskList';
 import LinksManager from '@/components/LinksManager';
-import { Power, List, Link as LinkIcon } from 'lucide-react';
+import ProfileModal from '@/components/ProfileModal';
+import { Power, List, Link as LinkIcon, User } from 'lucide-react';
 
 export default function Home() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'tasks' | 'links'>('tasks');
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [user, setUser] = useState<any>(null);
   const router = useRouter();
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      router.push('/login');
-    } else {
+    const checkAuth = () => {
+      const token = localStorage.getItem('token');
+      const userData = localStorage.getItem('user');
+      
+      if (!token) {
+        router.push('/login');
+        return;
+      }
+      
+      if (userData) {
+        try {
+          setUser(JSON.parse(userData));
+        } catch (error) {
+          console.error('Error parsing user data:', error);
+        }
+      }
+      
       setIsAuthenticated(true);
-    }
+      setIsLoading(false);
+    };
+
+    checkAuth();
   }, [router]);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('user');
     router.push('/login');
   };
 
+  // Show loading screen while checking authentication
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-cyan-400 font-mono text-sm">INITIALIZING...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Don't render anything if not authenticated (will redirect)
   if (!isAuthenticated) return null;
 
   return (
@@ -49,15 +83,30 @@ export default function Home() {
               <p className="text-gray-500 text-[10px] tracking-wider sm:hidden">
                 &gt; A.R.I.A
               </p>
+              {user && (
+                <p className="text-gray-600 text-[10px] sm:text-xs font-mono mt-1">
+                  &gt; WELCOME: {user.name} {user.isOAuthUser && <span className="text-cyan-400">OAUTH</span>}
+                </p>
+              )}
             </div>
             
-            <button
-              onClick={handleLogout}
-              className="flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-gray-400 hover:text-red-400 border border-zinc-800 hover:border-red-900 transition-all duration-200 text-xs sm:text-sm min-w-[40px] sm:min-w-auto"
-            >
-              <Power className="w-4 h-4" />
-              <span className="hidden sm:inline">LOGOUT</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsProfileOpen(true)}
+                className="flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-gray-400 hover:text-cyan-400 border border-zinc-800 hover:border-cyan-900 transition-all duration-200 text-xs sm:text-sm min-w-[40px] sm:min-w-auto"
+              >
+                <User className="w-4 h-4" />
+                <span className="hidden sm:inline">PROFILE</span>
+              </button>
+              
+              <button
+                onClick={handleLogout}
+                className="flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-gray-400 hover:text-red-400 border border-zinc-800 hover:border-red-900 transition-all duration-200 text-xs sm:text-sm min-w-[40px] sm:min-w-auto"
+              >
+                <Power className="w-4 h-4" />
+                <span className="hidden sm:inline">LOGOUT</span>
+              </button>
+            </div>
           </div>
         </header>
 
@@ -103,6 +152,12 @@ export default function Home() {
           <p className="sm:hidden">&gt; ONLINE</p>
         </footer>
       </div>
+
+      {/* Profile Modal */}
+      <ProfileModal 
+        isOpen={isProfileOpen} 
+        onClose={() => setIsProfileOpen(false)} 
+      />
     </main>
   );
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { CheckCircle2, Circle, Trash2, Clock, Edit3 } from 'lucide-react';
+import { CheckCircle2, Circle, Trash2, Clock, Edit3, CheckCheck, XCircle } from 'lucide-react';
 import api from '@/lib/api';
 import TaskEditModal from './TaskEditModal';
 import { formatDateTimeIST } from '@/lib/timeUtils';
@@ -22,7 +22,7 @@ export default function TaskList() {
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
     isOpen: boolean;
     task: Task | null;
-    type: 'single' | 'all';
+    type: 'single' | 'all' | 'markAllDone' | 'markAllUndone';
   }>({
     isOpen: false,
     task: null,
@@ -93,6 +93,34 @@ export default function TaskList() {
     }
   };
 
+  const markAllTasksCompleted = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      await fetch(api.endpoints.tasks.markAllCompleted, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      fetchTasks();
+      setDeleteConfirmation({ isOpen: false, task: null, type: 'single' });
+    } catch (error) {
+      console.error('Error marking all tasks as completed:', error);
+    }
+  };
+
+  const markAllTasksIncomplete = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      await fetch(api.endpoints.tasks.markAllIncomplete, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      fetchTasks();
+      setDeleteConfirmation({ isOpen: false, task: null, type: 'single' });
+    } catch (error) {
+      console.error('Error marking all tasks as incomplete:', error);
+    }
+  };
+
   const showDeleteConfirmation = (task: Task) => {
     setDeleteConfirmation({ isOpen: true, task, type: 'single' });
   };
@@ -101,11 +129,23 @@ export default function TaskList() {
     setDeleteConfirmation({ isOpen: true, task: null, type: 'all' });
   };
 
+  const showMarkAllDoneConfirmation = () => {
+    setDeleteConfirmation({ isOpen: true, task: null, type: 'markAllDone' });
+  };
+
+  const showMarkAllUndoneConfirmation = () => {
+    setDeleteConfirmation({ isOpen: true, task: null, type: 'markAllUndone' });
+  };
+
   const handleConfirmDelete = () => {
     if (deleteConfirmation.type === 'single' && deleteConfirmation.task) {
       deleteTask(deleteConfirmation.task._id);
     } else if (deleteConfirmation.type === 'all') {
       deleteAllTasks();
+    } else if (deleteConfirmation.type === 'markAllDone') {
+      markAllTasksCompleted();
+    } else if (deleteConfirmation.type === 'markAllUndone') {
+      markAllTasksIncomplete();
     }
   };
 
@@ -128,20 +168,43 @@ export default function TaskList() {
       <div className="bg-zinc-900 border border-zinc-800 p-4 sm:p-6">
         {/* Header */}
         <div className="border-b border-zinc-800 pb-2 sm:pb-3 mb-4 sm:mb-6">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between mb-2">
             <div>
               <p className="text-[10px] sm:text-xs text-gray-500 tracking-wider">&gt; TASK_MANAGER</p>
               <p className="text-xs sm:text-sm text-gray-400 mt-1">TOTAL: {tasks.length}</p>
             </div>
-            {tasks.length > 0 && (
+          </div>
+          
+          {tasks.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-3">
+              <button
+                onClick={showMarkAllDoneConfirmation}
+                className="text-green-500 hover:text-green-400 text-[10px] sm:text-xs font-mono px-2 py-1 border border-green-800 hover:border-green-600 transition-colors flex items-center gap-1"
+              >
+                <CheckCheck className="w-3 h-3" />
+                <span className="hidden sm:inline">MARK_ALL_DONE</span>
+                <span className="sm:hidden">DONE</span>
+              </button>
+              
+              <button
+                onClick={showMarkAllUndoneConfirmation}
+                className="text-yellow-500 hover:text-yellow-400 text-[10px] sm:text-xs font-mono px-2 py-1 border border-yellow-800 hover:border-yellow-600 transition-colors flex items-center gap-1"
+              >
+                <XCircle className="w-3 h-3" />
+                <span className="hidden sm:inline">MARK_ALL_UNDONE</span>
+                <span className="sm:hidden">UNDONE</span>
+              </button>
+              
               <button
                 onClick={showDeleteAllConfirmation}
-                className="text-red-500 hover:text-red-400 text-[10px] sm:text-xs font-mono px-2 py-1 border border-red-800 hover:border-red-600 transition-colors"
+                className="text-red-500 hover:text-red-400 text-[10px] sm:text-xs font-mono px-2 py-1 border border-red-800 hover:border-red-600 transition-colors flex items-center gap-1"
               >
-                DELETE_ALL
+                <Trash2 className="w-3 h-3" />
+                <span className="hidden sm:inline">DELETE_ALL</span>
+                <span className="sm:hidden">DELETE</span>
               </button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
         
         <div className="space-y-2 max-h-[400px] sm:max-h-[600px] overflow-y-auto pr-1 sm:pr-2">
@@ -184,18 +247,18 @@ export default function TaskList() {
                     )}
                   </div>
 
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
                       onClick={() => openEditModal(task)}
-                      className="text-cyan-500 hover:text-cyan-400 flex-shrink-0 active:scale-90 transition-transform"
+                      className="text-cyan-500 hover:text-cyan-400 flex-shrink-0 active:scale-90 transition-transform p-2 sm:p-1"
                     >
-                      <Edit3 className="w-3 h-3 sm:w-4 sm:h-4" />
+                      <Edit3 className="w-4 h-4 sm:w-4 sm:h-4" />
                     </button>
                     <button
                       onClick={() => showDeleteConfirmation(task)}
-                      className="text-red-500 hover:text-red-400 flex-shrink-0 active:scale-90 transition-transform"
+                      className="text-red-500 hover:text-red-400 flex-shrink-0 active:scale-90 transition-transform p-2 sm:p-1"
                     >
-                      <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
+                      <Trash2 className="w-4 h-4 sm:w-4 sm:h-4" />
                     </button>
                   </div>
                 </div>
@@ -245,7 +308,7 @@ export default function TaskList() {
                     This action cannot be undone.
                   </p>
                 </div>
-              ) : (
+              ) : deleteConfirmation.type === 'all' ? (
                 <div>
                   <p className="text-gray-200 text-sm font-mono mb-2">
                     Delete all {tasks.length} tasks?
@@ -254,7 +317,25 @@ export default function TaskList() {
                     This will permanently delete all tasks and cannot be undone.
                   </p>
                 </div>
-              )}
+              ) : deleteConfirmation.type === 'markAllDone' ? (
+                <div>
+                  <p className="text-gray-200 text-sm font-mono mb-2">
+                    Mark all {tasks.length} tasks as completed?
+                  </p>
+                  <p className="text-green-400 text-xs font-mono">
+                    All tasks will be marked as done. You can undo this action later.
+                  </p>
+                </div>
+              ) : deleteConfirmation.type === 'markAllUndone' ? (
+                <div>
+                  <p className="text-gray-200 text-sm font-mono mb-2">
+                    Mark all {tasks.length} tasks as incomplete?
+                  </p>
+                  <p className="text-yellow-400 text-xs font-mono">
+                    All tasks will be marked as not done. You can undo this action later.
+                  </p>
+                </div>
+              ) : null}
             </div>
 
             <div className="flex gap-3">
@@ -266,9 +347,22 @@ export default function TaskList() {
               </button>
               <button
                 onClick={handleConfirmDelete}
-                className="flex-1 bg-red-900 hover:bg-red-800 text-red-100 px-4 py-2 text-xs font-mono border border-red-700 transition-colors"
+                className={`flex-1 px-4 py-2 text-xs font-mono border transition-colors ${
+                  deleteConfirmation.type === 'markAllDone' 
+                    ? 'bg-green-900 hover:bg-green-800 text-green-100 border-green-700'
+                    : deleteConfirmation.type === 'markAllUndone'
+                    ? 'bg-yellow-900 hover:bg-yellow-800 text-yellow-100 border-yellow-700'
+                    : 'bg-red-900 hover:bg-red-800 text-red-100 border-red-700'
+                }`}
               >
-                {deleteConfirmation.type === 'single' ? 'DELETE' : 'DELETE_ALL'}
+                {deleteConfirmation.type === 'single' 
+                  ? 'DELETE' 
+                  : deleteConfirmation.type === 'all'
+                  ? 'DELETE_ALL'
+                  : deleteConfirmation.type === 'markAllDone'
+                  ? 'MARK_ALL_DONE'
+                  : 'MARK_ALL_UNDONE'
+                }
               </button>
             </div>
           </div>

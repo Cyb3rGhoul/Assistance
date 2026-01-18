@@ -27,8 +27,9 @@ export const startReminderCron = () => {
         
         for (const task of tasks) {
           console.log(`Processing reminder for: ${task.title} (due: ${task.reminderTime.toISOString()})`);
-          // Always send reminders to cyber.ghoul019@gmail.com instead of the logged-in user
-          const emailSent = await sendTaskReminder(task, 'cyber.ghoul019@gmail.com');
+          
+          // Send reminder to user's email (all users get reminders now)
+          const emailSent = await sendTaskReminder(task, task.userId.email);
           
           if (emailSent) {
             task.reminderSent = true;
@@ -66,12 +67,23 @@ export const startReminderCron = () => {
         });
         
         if (tasks.length > 0) {
-          // Always send morning summary to cyber.ghoul019@gmail.com
-          const emailSent = await sendMorningSummary('cyber.ghoul019@gmail.com', tasks);
-          if (emailSent) {
-            console.log(`Morning summary sent to cyber.ghoul019@gmail.com`);
-          } else {
-            console.log(`Failed morning summary to cyber.ghoul019@gmail.com`);
+          // Send morning summary to all users
+          const tasksByUser = {};
+          tasks.forEach(task => {
+            if (!tasksByUser[task.userId.email]) {
+              tasksByUser[task.userId.email] = [];
+            }
+            tasksByUser[task.userId.email].push(task);
+          });
+          
+          // Send summary to each user
+          for (const [email, userTasks] of Object.entries(tasksByUser)) {
+            const emailSent = await sendMorningSummary(email, userTasks);
+            if (emailSent) {
+              console.log(`Morning summary sent to ${email}`);
+            } else {
+              console.log(`Failed morning summary to ${email}`);
+            }
           }
         }
       }
@@ -104,12 +116,12 @@ export const startReminderCron = () => {
           completed: false
         });
         
-        // Always send evening report to cyber.ghoul019@gmail.com
-        const emailSent = await sendEveningReport('cyber.ghoul019@gmail.com', completedTasks, pendingTasks);
+        // Send evening report to all users
+        const emailSent = await sendEveningReport(user.email, completedTasks, pendingTasks);
         if (emailSent) {
-          console.log(`Evening report sent to cyber.ghoul019@gmail.com`);
+          console.log(`Evening report sent to ${user.email}`);
         } else {
-          console.log(`Failed evening report to cyber.ghoul019@gmail.com`);
+          console.log(`Failed evening report to ${user.email}`);
         }
       }
     } catch (error) {

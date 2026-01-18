@@ -59,4 +59,36 @@ router.delete('/', async (req, res) => {
   }
 });
 
+// Mark all tasks as completed
+router.put('/mark-all/completed', async (req, res) => {
+  try {
+    const result = await Task.updateMany(
+      { userId: req.user.userId },
+      { completed: true, updatedAt: Date.now() }
+    );
+    res.json({ 
+      message: `Marked ${result.modifiedCount} task${result.modifiedCount !== 1 ? 's' : ''} as completed`,
+      modifiedCount: result.modifiedCount 
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Mark all tasks as incomplete
+router.put('/mark-all/incomplete', async (req, res) => {
+  try {
+    const result = await Task.updateMany(
+      { userId: req.user.userId },
+      { completed: false, updatedAt: Date.now() }
+    );
+    res.json({ 
+      message: `Marked ${result.modifiedCount} task${result.modifiedCount !== 1 ? 's' : ''} as incomplete`,
+      modifiedCount: result.modifiedCount 
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;

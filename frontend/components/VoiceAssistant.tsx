@@ -55,6 +55,18 @@ export default function VoiceAssistant() {
       });
 
       const data = await res.json();
+      
+      // Handle API key errors
+      if (!res.ok) {
+        if (data.needsApiKey) {
+          setResponse('Please add your Gemini API key in profile settings to use voice commands.');
+        } else {
+          setResponse(data.error || 'Sorry, something went wrong.');
+        }
+        speak(data.error || 'Sorry, something went wrong.');
+        return;
+      }
+      
       setResponse(data.response);
       speak(data.response);
       
@@ -68,7 +80,9 @@ export default function VoiceAssistant() {
       }
     } catch (error) {
       console.error('Error:', error);
-      setResponse('Sorry, something went wrong.');
+      const errorMessage = 'Sorry, something went wrong. Please check your connection.';
+      setResponse(errorMessage);
+      speak(errorMessage);
     }
   };
 

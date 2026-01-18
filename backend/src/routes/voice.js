@@ -3,6 +3,7 @@ import { GoogleGenAI } from '@google/genai';
 import { Resend } from 'resend';
 import Task from '../models/Task.js';
 import Link from '../models/Link.js';
+import User from '../models/User.js';
 import { authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -20,6 +21,51 @@ setInterval(() => {
     }
   }
 }, 60000); // Clean up every minute
+
+// Helper function to get user's API key with failover
+async function getUserApiKey(userId, attemptFailover = false) {
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new Error('User not found');
+  }
+  
+  // ALL users must have their own API keys now
+  let apiKey = user.getCurrentApiKey();
+  
+  if (!apiKey && attemptFailover) {
+    // Try to switch to backup key
+    apiKey = await user.switchToBackupApiKey();
+  }
+  
+  if (!apiKey) {
+    throw new Error('No valid Gemini API key found. Please add your API key in profile settings.');
+  }
+  
+  return { apiKey: apiKey.trim(), user };
+}
+
+// Helper function to make Gemini API call with failover
+async function callGeminiWithFailover(userId, prompt, isRetry = false) {
+  try {
+    const { apiKey, user } = await getUserApiKey(userId, isRetry);
+    
+    const ai = new GoogleGenAI({ apiKey });
+    
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash-lite",
+      contents: prompt,
+    });
+    
+    return response.text;
+  } catch (error) {
+    // If this is the first attempt and we get an API error, try failover
+    if (!isRetry && (error.message.includes('API_KEY') || error.message.includes('quota') || error.message.includes('limit'))) {
+      console.log('Primary API key failed, attempting failover...');
+      return callGeminiWithFailover(userId, prompt, true);
+    }
+    throw error;
+  }
+}
 
 // Helper function to parse time in IST
 function parseTimeToIST(timeString) {
@@ -89,15 +135,19 @@ router.post('/process', async (req, res) => {
   try {
     const { command } = req.body;
     
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey || apiKey.trim() === '') {
-      throw new Error('GEMINI_API_KEY is not set or is empty');
+    // Get user to check if they have API access
+    const user = await User.findById(req.user.userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
     }
     
-    const ai = new GoogleGenAI({
-      apiKey: apiKey.trim(),
-      vertexai: false
-    });
+    // Check if user has API keys (required for all users now)
+    if (!user.hasValidApiKeys()) {
+      return res.status(400).json({ 
+        error: 'Please add your Gemini API key in profile settings to use voice commands.',
+        needsApiKey: true
+      });
+    }
 
     const allTasks = await Task.find({ userId: req.user.userId });
     const tasksList = allTasks.map(t => ({
@@ -194,12 +244,10 @@ Examples:
 - "search for react links" → action: searchLinks, searchQuery: "react"
 - "find links about javascript" → action: searchLinks, searchQuery: "javascript"`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-lite",
-      contents: prompt,
-    });
+    // Use the new API key system with failover
+    const aiResponse = await callGeminiWithFailover(req.user.userId, prompt);
     
-    const text = response.text.trim();
+    const text = aiResponse.trim();
     const parsed = JSON.parse(text.replace(/```json\n?|\n?```/g, ''));
 
     let responseData = { ...parsed };
@@ -269,12 +317,9 @@ Return format:
   "tags": ["tag1", "tag2"] (max 2 relevant tags, lowercase, most important only)
 }`;
 
-          const categoryResponse = await ai.models.generateContent({
-            model: "gemini-2.5-flash-lite",
-            contents: categoryPrompt,
-          });
+          const categoryResponse = await callGeminiWithFailover(req.user.userId, categoryPrompt);
           
-          const responseText = categoryResponse.text.trim();
+          const responseText = categoryResponse.trim();
           // Remove markdown code blocks if present
           const cleanedResponse = responseText.replace(/```json\n?|\n?```/g, '');
           const aiResult = JSON.parse(cleanedResponse);
