@@ -56,11 +56,24 @@ export default function TaskEditModal({ task, isOpen, onClose, onSave }: TaskEdi
         reminderDate: reminderDateIST,
         reminderTime: reminderTimeIST
       });
+    } else {
+      // Reset form for new task
+      setFormData({
+        title: '',
+        description: '',
+        dueDate: '',
+        dueTime: '',
+        reminderDate: '',
+        reminderTime: ''
+      });
     }
-  }, [task]);
+  }, [task, isOpen]);
 
   const handleSave = async () => {
-    if (!task) return;
+    if (!formData.title.trim()) {
+      alert('Please enter a task title');
+      return;
+    }
 
     try {
       const token = localStorage.getItem('token');
@@ -76,35 +89,52 @@ export default function TaskEditModal({ task, isOpen, onClose, onSave }: TaskEdi
         reminderTime = istToUTC(formData.reminderDate, formData.reminderTime);
       }
 
-      await fetch(api.endpoints.tasks.update(task._id), {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          title: formData.title,
-          description: formData.description || null,
-          dueDate,
-          reminderTime
-        })
-      });
+      const taskData = {
+        title: formData.title,
+        description: formData.description || null,
+        dueDate,
+        reminderTime
+      };
+
+      if (task) {
+        // Update existing task
+        await fetch(api.endpoints.tasks.update(task._id), {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(taskData)
+        });
+      } else {
+        // Create new task
+        await fetch(api.endpoints.tasks.create, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(taskData)
+        });
+      }
 
       onSave();
       onClose();
     } catch (error) {
-      console.error('Error updating task:', error);
+      console.error('Error saving task:', error);
     }
   };
 
-  if (!isOpen || !task) return null;
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-zinc-900 border border-zinc-800 w-full max-w-md animate-in fade-in duration-200">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-zinc-800">
-          <h2 className="text-sm font-mono text-cyan-400">&gt; EDIT_TASK</h2>
+          <h2 className="text-sm font-mono text-cyan-400">
+            &gt; {task ? 'EDIT_TASK' : 'CREATE_TASK'}
+          </h2>
           <button
             onClick={onClose}
             className="text-gray-500 hover:text-red-400 transition-colors"
@@ -212,7 +242,7 @@ export default function TaskEditModal({ task, isOpen, onClose, onSave }: TaskEdi
             className="flex-1 py-2 bg-cyan-500 hover:bg-cyan-400 text-black text-sm font-mono transition-colors flex items-center justify-center gap-2"
           >
             <Save className="w-4 h-4" />
-            SAVE
+            {task ? 'UPDATE' : 'CREATE'}
           </button>
         </div>
       </div>

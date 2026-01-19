@@ -187,7 +187,7 @@ ${JSON.stringify(tasksList, null, 2)}
 
 Return format:
 {
-  "action": "create|list|update|delete|deleteAll|complete|sendEmail|saveLink|searchLinks|deleteLink|confirmDelete|confirmDeleteAll|confirmDeleteLink",
+  "action": "create|list|listAll|update|delete|deleteAll|complete|sendEmail|saveLink|searchLinks|deleteLink|confirmDelete|confirmDeleteAll|confirmDeleteLink",
   "task": {
     "title": "task title",
     "description": "details or null",
@@ -223,7 +223,9 @@ IMPORTANT RULES:
 - For "sendEmail": Use when user asks to send/email task list
 - For "saveLink": Use when user provides a URL to save/bookmark
 - For "deleteLink": Use when user wants to delete a saved link, ask for confirmation first
-- For "searchLinks": Use when user asks to search/find links by keywords
+- For "searchLinks": Use when user asks to search/find links by keywords - ALL link searches are silent (no voice response)
+- For "list": Use when user asks for pending/incomplete tasks only
+- For "listAll": Use when user asks "what's on my plate", "tell me all my tasks", "show me everything", "all tasks", "what do I have"
 - Parse dates naturally in IST: "today 6pm" = today at 18:00 IST, "tomorrow 5pm" = tomorrow at 17:00 IST
 - When providing ISO dates, calculate the correct UTC time that represents the IST time
 - For example: "2:35 PM IST today" should be converted to UTC and provided as ISO string
@@ -237,6 +239,9 @@ Examples:
 - "bookmark https://github.com/user/repo" → action: saveLink
 - "delete github link" → action: deleteLink (ask for confirmation first)
 - "what are my tasks today" → action: list
+- "what's on my plate today" → action: listAll
+- "tell me all my tasks" → action: listAll
+- "show me everything I have" → action: listAll
 - "mark buy groceries as complete" → action: complete, taskId: (match from tasks)
 - "delete meeting task" → action: delete (ask for confirmation first)
 - "yes delete it" → action: confirmDelete, taskId: (from previous context)
@@ -244,7 +249,9 @@ Examples:
 - "yes clear everything" → action: confirmDeleteAll
 - "send my tasks to email" → action: sendEmail
 - "search for react links" → action: searchLinks, searchQuery: "react"
-- "find links about javascript" → action: searchLinks, searchQuery: "javascript"`;
+- "find links about javascript" → action: searchLinks, searchQuery: "javascript"
+- "show me image to 3d links" → action: searchLinks, searchQuery: "image 3d"
+- "get links for python" → action: searchLinks, searchQuery: "python"`;
 
     // Use the new API key system with failover
     const aiResponse = await callGeminiWithFailover(req.user.userId, prompt);
@@ -355,7 +362,52 @@ Return format:
         if (tasks.length === 0) {
           responseData.response = "You have no pending tasks.";
         } else {
-          responseData.response = `You have ${tasks.length} task${tasks.length > 1 ? 's' : ''}: ${tasks.map(t => t.title).join(', ')}`;
+          responseData.response = `You have ${tasks.length} pending task${tasks.length > 1 ? 's' : ''}: ${tasks.map(t => t.title).join(', ')}`;
+        }
+        break;
+
+      case 'listAll':
+        const allUserTasks = await Task.find({ userId: req.user.userId }).sort({ createdAt: -1 });
+        const pendingTasks = allUserTasks.filter(t => !t.completed);
+        const completedTasks = allUserTasks.filter(t => t.completed);
+        
+        responseData.allTasks = allUserTasks;
+        responseData.pendingTasks = pendingTasks;
+        responseData.completedTasks = completedTasks;
+        
+        if (allUserTasks.length === 0) {
+          responseData.response = "You have no tasks at all. Your plate is completely clean!";
+        } else {
+          let response = `Here's everything on your plate:\n\n`;
+          
+          if (pendingTasks.length > 0) {
+            response += `PENDING TASKS (${pendingTasks.length}):\n`;
+            pendingTasks.forEach((task, index) => {
+              response += `${index + 1}. ${task.title}`;
+              if (task.description) response += ` - ${task.description}`;
+              if (task.reminderTime) {
+                const reminderIST = new Date(task.reminderTime.getTime() + 5.5 * 60 * 60 * 1000);
+                response += ` - Reminder: ${reminderIST.toLocaleString('en-US', { timeZone: 'Asia/Kolkata', hour12: true })} IST`;
+              }
+              response += `\n`;
+            });
+            response += `\n`;
+          }
+          
+          if (completedTasks.length > 0) {
+            response += `COMPLETED TASKS (${completedTasks.length}):\n`;
+            completedTasks.forEach((task, index) => {
+              response += `${index + 1}. ${task.title}`;
+              if (task.description) response += ` - ${task.description}`;
+              response += `\n`;
+            });
+          }
+          
+          if (pendingTasks.length === 0) {
+            response += `Great job! All your tasks are completed. You have ${completedTasks.length} completed task${completedTasks.length > 1 ? 's' : ''}.`;
+          }
+          
+          responseData.response = response;
         }
         break;
 
@@ -570,7 +622,7 @@ Return format:
             category: l.category
           }));
           responseData.response = `Found ${matchingLinks.length} links matching "${parsed.searchQuery}":\n\n` +
-            matchingLinks.map((l, i) => `${i + 1}. ${l.title}\n   🔗 ${l.url}\n   📂 ${l.category}`).join('\n\n') +
+            matchingLinks.map((l, i) => `${i + 1}. ${l.title}\n   Link: ${l.url}\n   Category: ${l.category}`).join('\n\n') +
             '\n\nPlease specify which one you want to delete by saying the number or being more specific.';
           break;
         } else {
@@ -595,6 +647,7 @@ Return format:
           throw new Error('Search query is required');
         }
 
+        // Enhanced search with partial matching
         const searchResults = await Link.find({
           userId: req.user.userId,
           $or: [
@@ -602,27 +655,22 @@ Return format:
             { description: { $regex: searchQuery, $options: 'i' } },
             { autoTags: { $in: [new RegExp(searchQuery, 'i')] } },
             { userTags: { $in: [new RegExp(searchQuery, 'i')] } },
-            { category: { $regex: searchQuery, $options: 'i' } }
+            { category: { $regex: searchQuery, $options: 'i' } },
+            { url: { $regex: searchQuery, $options: 'i' } },
+            // Partial word matching in tags
+            { autoTags: { $elemMatch: { $regex: `.*${searchQuery}.*`, $options: 'i' } } },
+            { userTags: { $elemMatch: { $regex: `.*${searchQuery}.*`, $options: 'i' } } }
           ]
         }).sort({ createdAt: -1 });
 
         responseData.links = searchResults;
+        
+        // ALL link searches are now silent - no voice response
         if (searchResults.length === 0) {
           responseData.response = `No links found for "${searchQuery}".`;
         } else {
-          // Return the actual links with clickable URLs
-          let linksList = `Found ${searchResults.length} link${searchResults.length > 1 ? 's' : ''} for "${searchQuery}":\n\n`;
-          
-          searchResults.forEach((link, index) => {
-            linksList += `${index + 1}. ${link.title}\n`;
-            linksList += `   🔗 ${link.url}\n`;
-            if (link.description) {
-              linksList += `   📝 ${link.description.substring(0, 100)}${link.description.length > 100 ? '...' : ''}\n`;
-            }
-            linksList += `   📂 ${link.category} | 🏷️ ${[...link.autoTags, ...link.userTags].join(', ')}\n\n`;
-          });
-          
-          responseData.response = linksList;
+          // Return only the URLs, one per line, without any extra text
+          responseData.response = searchResults.map(link => link.url).join('\n');
         }
         break;
 
@@ -713,8 +761,8 @@ Return format:
 
         const resend = new Resend(resendApiKey);
         const userTasks = await Task.find({ userId: req.user.userId });
-        const pendingTasks = userTasks.filter(t => !t.completed);
-        const completedTasks = userTasks.filter(t => t.completed);
+        const emailPendingTasks = userTasks.filter(t => !t.completed);
+        const emailCompletedTasks = userTasks.filter(t => t.completed);
 
         const emailHtml = `
           <div style="font-family: 'Roboto Mono', monospace; max-width: 600px; margin: 0 auto; background: #000000; color: #e5e5e5; padding: 40px 20px;">
@@ -724,19 +772,19 @@ Return format:
               
               <div style="margin-bottom: 24px;">
                 <div style="display: inline-block; background: #22d3ee; color: #000; padding: 8px 16px; margin-right: 8px;">
-                  <span style="font-weight: 700; font-size: 24px;">${pendingTasks.length}</span>
+                  <span style="font-weight: 700; font-size: 24px;">${emailPendingTasks.length}</span>
                   <span style="font-size: 12px; margin-left: 4px;">PENDING</span>
                 </div>
                 <div style="display: inline-block; background: #10b981; color: #000; padding: 8px 16px;">
-                  <span style="font-weight: 700; font-size: 24px;">${completedTasks.length}</span>
+                  <span style="font-weight: 700; font-size: 24px;">${emailCompletedTasks.length}</span>
                   <span style="font-size: 12px; margin-left: 4px;">COMPLETED</span>
                 </div>
               </div>
               
-              ${pendingTasks.length > 0 ? `
+              ${emailPendingTasks.length > 0 ? `
                 <div style="border: 1px solid #27272a; padding: 16px; margin-bottom: 16px; background: #09090b;">
                   <p style="color: #71717a; margin: 0 0 12px 0; font-size: 10px; letter-spacing: 1px;">&gt; PENDING_TASKS</p>
-                  ${pendingTasks.map(task => `
+                  ${emailPendingTasks.map(task => `
                     <div style="border-left: 2px solid #22d3ee; padding: 12px; margin-bottom: 8px; background: #18181b;">
                       <p style="margin: 0; color: #e5e5e5; font-size: 14px; font-weight: 600;">${task.title}</p>
                       ${task.description ? `<p style="margin: 4px 0 0 0; color: #71717a; font-size: 12px;">${task.description}</p>` : ''}
@@ -750,10 +798,10 @@ Return format:
                 </div>
               `}
               
-              ${completedTasks.length > 0 ? `
+              ${emailCompletedTasks.length > 0 ? `
                 <div style="border: 1px solid #27272a; padding: 16px; background: #09090b;">
                   <p style="color: #71717a; margin: 0 0 12px 0; font-size: 10px; letter-spacing: 1px;">&gt; COMPLETED_TASKS</p>
-                  ${completedTasks.map(task => `
+                  ${emailCompletedTasks.map(task => `
                     <div style="border-left: 2px solid #10b981; padding: 12px; margin-bottom: 8px; background: #18181b; opacity: 0.6;">
                       <p style="margin: 0; color: #e5e5e5; font-size: 14px; text-decoration: line-through;">${task.title}</p>
                     </div>
@@ -772,13 +820,13 @@ Return format:
           await resend.emails.send({
             from: 'ARIA Assistant <onboarding@resend.dev>',
             to: user.email,
-            subject: `[ARIA] Task Report - ${pendingTasks.length} Pending, ${completedTasks.length} Completed`,
+            subject: `[ARIA] Task Report - ${emailPendingTasks.length} Pending, ${emailCompletedTasks.length} Completed`,
             html: emailHtml
           });
 
           responseData.emailSent = true;
           if (!responseData.response) {
-            responseData.response = `Task list sent to your email (${user.email}). You have ${pendingTasks.length} pending and ${completedTasks.length} completed tasks.`;
+            responseData.response = `Task list sent to your email (${user.email}). You have ${emailPendingTasks.length} pending and ${emailCompletedTasks.length} completed tasks.`;
           }
         } catch (emailError) {
           console.error('Email send error:', emailError);

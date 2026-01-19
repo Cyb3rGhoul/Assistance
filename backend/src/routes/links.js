@@ -378,10 +378,11 @@ Return format:
 // Update link (mainly for adding user tags)
 router.put('/:id', async (req, res) => {
   try {
-    const { userTags, title, description } = req.body;
+    const { userTags, autoTags, title, description } = req.body;
     
     const updateData = { updatedAt: Date.now() };
     if (userTags !== undefined) updateData.userTags = userTags;
+    if (autoTags !== undefined) updateData.autoTags = autoTags;
     if (title !== undefined) updateData.title = title;
     if (description !== undefined) updateData.description = description;
     

@@ -23,7 +23,7 @@ interface Metadata {
 
 interface EditLinkFormProps {
   link: Link;
-  onSave: (data: { title: string; description: string; userTags: string[] }) => void;
+  onSave: (data: { title: string; description: string; userTags: string[]; autoTags: string[] }) => void;
   onCancel: () => void;
 }
 
@@ -31,6 +31,7 @@ function EditLinkForm({ link, onSave, onCancel }: EditLinkFormProps) {
   const [title, setTitle] = useState(link.title);
   const [description, setDescription] = useState(link.description || '');
   const [userTags, setUserTags] = useState<string[]>(link.userTags);
+  const [autoTags, setAutoTags] = useState<string[]>(link.autoTags);
   const [newTag, setNewTag] = useState('');
 
   const handleAddTag = () => {
@@ -41,15 +42,20 @@ function EditLinkForm({ link, onSave, onCancel }: EditLinkFormProps) {
     }
   };
 
-  const handleRemoveTag = (tagToRemove: string) => {
+  const handleRemoveUserTag = (tagToRemove: string) => {
     setUserTags(userTags.filter(tag => tag !== tagToRemove));
+  };
+
+  const handleRemoveAutoTag = (tagToRemove: string) => {
+    setAutoTags(autoTags.filter(tag => tag !== tagToRemove));
   };
 
   const handleSave = () => {
     onSave({
       title: title.trim(),
       description: description.trim(),
-      userTags
+      userTags,
+      autoTags
     });
   };
 
@@ -87,21 +93,31 @@ function EditLinkForm({ link, onSave, onCancel }: EditLinkFormProps) {
         />
       </div>
 
-      {/* Auto Tags (read-only) */}
-      {link.autoTags.length > 0 && (
+      {/* Auto Tags (editable) */}
+      {autoTags.length > 0 && (
         <div>
           <label className="block text-xs text-gray-400 font-mono mb-1">AUTO_TAGS</label>
           <div className="flex flex-wrap gap-1">
-            {link.autoTags.map((tag, index) => (
+            {autoTags.map((tag, index) => (
               <span
                 key={index}
                 className="bg-green-500/20 text-green-400 px-2 py-0.5 text-[10px] font-mono flex items-center gap-1"
               >
                 <Tag className="w-2 h-2" />
                 {tag}
+                <button
+                  onClick={() => handleRemoveAutoTag(tag)}
+                  className="text-green-300 hover:text-red-400 ml-1"
+                  title="Remove auto tag"
+                >
+                  ×
+                </button>
               </span>
             ))}
           </div>
+          <p className="text-[9px] text-gray-600 font-mono mt-1">
+            * Click × to remove unwanted auto-generated tags
+          </p>
         </div>
       )}
 
@@ -120,7 +136,7 @@ function EditLinkForm({ link, onSave, onCancel }: EditLinkFormProps) {
                 <Tag className="w-2 h-2" />
                 {tag}
                 <button
-                  onClick={() => handleRemoveTag(tag)}
+                  onClick={() => handleRemoveUserTag(tag)}
                   className="text-purple-300 hover:text-red-400 ml-1"
                 >
                   ×
@@ -322,7 +338,7 @@ export default function LinksManager() {
     setDeleteConfirmation({ isOpen: false, link: null });
   };
 
-  const handleEditSave = async (updatedData: { title: string; description: string; userTags: string[] }) => {
+  const handleEditSave = async (updatedData: { title: string; description: string; userTags: string[]; autoTags: string[] }) => {
     if (!editModal.link) return;
 
     try {

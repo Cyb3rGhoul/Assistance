@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Mic, MicOff, Volume2, Sparkles } from 'lucide-react';
+import { Mic, MicOff, Volume2 } from 'lucide-react';
 import api from '@/lib/api';
 
 export default function VoiceAssistant() {
@@ -10,22 +10,23 @@ export default function VoiceAssistant() {
   const [response, setResponse] = useState('');
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [audioLevel, setAudioLevel] = useState(0);
   const recognitionRef = useRef<any>(null);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastSpeechTimeRef = useRef<number>(0);
+  const finalTranscriptRef = useRef<string>('');
 
   useEffect(() => {
     if (typeof window !== 'undefined' && 'webkitSpeechRecognition' in window) {
       const SpeechRecognition = (window as any).webkitSpeechRecognition;
       recognitionRef.current = new SpeechRecognition();
-      recognitionRef.current.continuous = true; // Keep listening continuously
-      recognitionRef.current.interimResults = true; // Get interim results to detect speech
+      recognitionRef.current.continuous = false; // Don't keep listening continuously
+      recognitionRef.current.interimResults = true;
 
-      recognitionRef.current.onresult = async (event: any) => {
+      recognitionRef.current.onresult = (event: any) => {
         let finalTranscript = '';
         let interimTranscript = '';
 
-        // Process all results
         for (let i = event.resultIndex; i < event.results.length; i++) {
           const transcript = event.results[i][0].transcript;
           if (event.results[i].isFinal) {
@@ -35,59 +36,43 @@ export default function VoiceAssistant() {
           }
         }
 
-        // Update transcript with interim results for real-time feedback
-        setTranscript(finalTranscript + interimTranscript);
+        // Update display transcript with interim results
+        setTranscript(finalTranscriptRef.current + finalTranscript + interimTranscript);
 
-        // If we have speech (interim or final), reset the silence timer
-        if (finalTranscript || interimTranscript) {
-          lastSpeechTimeRef.current = Date.now();
+        // Process final transcript immediately
+        if (finalTranscript) {
+          finalTranscriptRef.current += finalTranscript;
           
-          // Clear existing timer
+          // Clear any existing timer
           if (silenceTimerRef.current) {
             clearTimeout(silenceTimerRef.current);
           }
 
-          // Set new timer for 10 seconds of silence
+          // Process immediately after final transcript with minimal delay
           silenceTimerRef.current = setTimeout(() => {
-            if (recognitionRef.current && isListening) {
+            if (finalTranscriptRef.current.trim()) {
               recognitionRef.current.stop();
+              processCommand(finalTranscriptRef.current.trim());
             }
-          }, 10000); // 10 seconds
-        }
-
-        // Process final transcript
-        if (finalTranscript.trim() && !isProcessing) {
-          // Clear the timer since we're processing
-          if (silenceTimerRef.current) {
-            clearTimeout(silenceTimerRef.current);
-          }
-          
-          setTranscript(finalTranscript.trim());
-          recognitionRef.current.stop();
-          await processCommand(finalTranscript.trim());
+          }, 500); // Just 0.5 seconds
         }
       };
 
       recognitionRef.current.onstart = () => {
+        finalTranscriptRef.current = '';
+        setTranscript('');
         lastSpeechTimeRef.current = Date.now();
-        // Set initial silence timer for 10 seconds
-        silenceTimerRef.current = setTimeout(() => {
-          if (recognitionRef.current && isListening) {
-            recognitionRef.current.stop();
-          }
-        }, 10000); // 10 seconds
       };
 
       recognitionRef.current.onend = () => {
         setIsListening(false);
-        // Clear any remaining timers
         if (silenceTimerRef.current) {
           clearTimeout(silenceTimerRef.current);
         }
         
-        // Process transcript if we have one and not already processing
-        if (transcript.trim() && !isProcessing) {
-          processCommand(transcript.trim());
+        // Process any remaining transcript immediately
+        if (finalTranscriptRef.current.trim() && !isProcessing) {
+          processCommand(finalTranscriptRef.current.trim());
         }
       };
 
@@ -98,47 +83,52 @@ export default function VoiceAssistant() {
           clearTimeout(silenceTimerRef.current);
         }
         
-        // Show user-friendly error messages
-        let errorMessage = '';
-        switch (event.error) {
-          case 'no-speech':
-            errorMessage = 'No speech detected. Please try speaking again.';
-            break;
-          case 'audio-capture':
-            errorMessage = 'Microphone access denied. Please allow microphone access.';
-            break;
-          case 'not-allowed':
-            errorMessage = 'Microphone permission denied. Please enable microphone in settings.';
-            break;
-          default:
-            errorMessage = 'Something went wrong. Please try again.';
+        // Only show error for meaningful errors, not "no-speech"
+        if (event.error !== 'no-speech') {
+          let errorMessage = '';
+          switch (event.error) {
+            case 'audio-capture':
+              errorMessage = 'Microphone access denied. Please allow microphone access.';
+              break;
+            case 'not-allowed':
+              errorMessage = 'Microphone permission denied. Please enable microphone in settings.';
+              break;
+            case 'network':
+              errorMessage = 'Network error. Please check your connection.';
+              break;
+            default:
+              errorMessage = 'Voice recognition error. Please try again.';
+          }
+          
+          setResponse(errorMessage);
+          speak(errorMessage);
         }
-        
-        setResponse(errorMessage);
-        speak(errorMessage);
       };
     }
 
-    // Cleanup function
     return () => {
       if (silenceTimerRef.current) {
         clearTimeout(silenceTimerRef.current);
       }
     };
-  }, [isListening]);
+  }, [isListening, isProcessing]);
 
   const toggleListening = () => {
     if (isListening) {
-      // Clear any existing timers
       if (silenceTimerRef.current) {
         clearTimeout(silenceTimerRef.current);
       }
       recognitionRef.current?.stop();
       setIsListening(false);
+      
+      // Process immediately when manually stopped
+      if (finalTranscriptRef.current.trim() && !isProcessing) {
+        processCommand(finalTranscriptRef.current.trim());
+      }
     } else {
-      // Don't start if already processing
       if (isProcessing) return;
       
+      finalTranscriptRef.current = '';
       recognitionRef.current?.start();
       setIsListening(true);
       setTranscript('');
@@ -147,10 +137,10 @@ export default function VoiceAssistant() {
   };
 
   const processCommand = async (command: string) => {
-    // Prevent multiple simultaneous processing
     if (isProcessing) return;
     
     setIsProcessing(true);
+    setTranscript(command); // Set final transcript
     
     try {
       const token = localStorage.getItem('token');
@@ -165,14 +155,12 @@ export default function VoiceAssistant() {
 
       const data = await res.json();
       
-      // Handle API key errors
       if (!res.ok) {
         if (data.needsApiKey) {
           const apiKeyMessage = 'Please add your Gemini API key in profile settings to use voice commands.';
           setResponse(apiKeyMessage);
           speak(apiKeyMessage);
         } else if (data.error) {
-          // Better error messages for incomplete tasks
           let errorMessage = data.error;
           
           if (data.error.includes('incomplete') || data.error.includes('unclear') || data.error.includes('understand')) {
@@ -202,7 +190,6 @@ export default function VoiceAssistant() {
         window.dispatchEvent(new Event('taskUpdate'));
       }
       
-      // If it's a link search, also trigger links update
       if (data.action === 'searchLinks') {
         window.dispatchEvent(new Event('linksUpdate'));
       }
@@ -213,6 +200,7 @@ export default function VoiceAssistant() {
       speak(errorMessage);
     } finally {
       setIsProcessing(false);
+      finalTranscriptRef.current = '';
     }
   };
 
@@ -266,33 +254,96 @@ export default function VoiceAssistant() {
           <p className="text-[10px] sm:text-xs text-gray-500 tracking-wider">&gt; VOICE_INTERFACE</p>
         </div>
 
-        {/* Microphone Button */}
-        <div className="relative">
+        {/* Futuristic 3D Voice Visualizer */}
+        <div className="relative flex items-center justify-center voice-visualizer-3d">
+          {/* Neural Network SVG */}
+          <svg className="absolute w-48 h-48 sm:w-56 sm:h-56 opacity-30" viewBox="0 0 200 200">
+            <defs>
+              <filter id="glow">
+                <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                <feMerge> 
+                  <feMergeNode in="coloredBlur"/>
+                  <feMergeNode in="SourceGraphic"/>
+                </feMerge>
+              </filter>
+            </defs>
+            {/* Neural network paths */}
+            <path d="M 50 100 Q 100 50 150 100" className="neural-path" filter="url(#glow)" />
+            <path d="M 50 100 Q 100 150 150 100" className="neural-path" filter="url(#glow)" style={{animationDelay: '0.5s'}} />
+            <path d="M 100 50 Q 150 100 100 150" className="neural-path" filter="url(#glow)" style={{animationDelay: '1s'}} />
+            <path d="M 100 50 Q 50 100 100 150" className="neural-path" filter="url(#glow)" style={{animationDelay: '1.5s'}} />
+          </svg>
+
+          {/* Main energy core button */}
           <button
             onClick={toggleListening}
             disabled={isProcessing}
-            className={`w-20 h-20 sm:w-24 sm:h-24 border-2 flex items-center justify-center transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${
+            className={`relative w-28 h-28 sm:w-32 sm:h-32 rounded-full border-2 flex items-center justify-center transition-all duration-500 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed z-10 energy-core ${
               isListening
-                ? 'border-red-500 bg-red-500/10 text-red-400'
-                : 'border-cyan-500 bg-cyan-500/5 text-cyan-400 hover:bg-cyan-500/10'
+                ? 'border-red-500/50 bg-gradient-to-br from-red-500/30 via-red-500/20 to-red-500/10 text-red-400 shadow-2xl shadow-red-500/40'
+                : isProcessing
+                ? 'border-blue-500/50 bg-gradient-to-br from-blue-500/30 via-blue-500/20 to-blue-500/10 text-blue-400 shadow-2xl shadow-blue-500/40'
+                : 'border-cyan-500/50 bg-gradient-to-br from-cyan-500/20 via-cyan-500/10 to-cyan-500/5 text-cyan-400 hover:from-cyan-500/40 hover:via-cyan-500/20 hover:to-cyan-500/10 hover:shadow-2xl hover:shadow-cyan-500/40'
             }`}
+            style={{
+              backdropFilter: 'blur(10px)',
+              background: isListening 
+                ? 'radial-gradient(circle, rgba(239, 68, 68, 0.2), rgba(239, 68, 68, 0.05))' 
+                : isProcessing
+                ? 'radial-gradient(circle, rgba(59, 130, 246, 0.2), rgba(59, 130, 246, 0.05))'
+                : 'radial-gradient(circle, rgba(6, 182, 212, 0.15), rgba(6, 182, 212, 0.05))'
+            }}
           >
-            {isListening ? (
-              <MicOff className="w-8 h-8 sm:w-10 sm:h-10" />
+            {isProcessing ? (
+              <div className="w-10 h-10 sm:w-12 sm:h-12 border-3 border-blue-400 border-t-transparent rounded-full animate-spin shadow-lg"></div>
+            ) : isListening ? (
+              <MicOff className="w-10 h-10 sm:w-12 sm:h-12 drop-shadow-lg" />
             ) : (
-              <Mic className="w-8 h-8 sm:w-10 sm:h-10" />
+              <Mic className="w-10 h-10 sm:w-12 sm:h-12 drop-shadow-lg" />
             )}
           </button>
-          
-          {isSpeaking && (
-            <div className="absolute -top-2 -right-2 bg-green-500 p-1.5">
-              <Volume2 className="w-3 h-3 sm:w-4 sm:h-4 text-black" />
+
+          {/* 3D Voice level visualizer */}
+          {isListening && !isProcessing && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              {[...Array(12)].map((_, i) => (
+                <div
+                  key={`voice-bar-${i}`}
+                  className="absolute voice-bar-3d"
+                  style={{
+                    width: '2px',
+                    height: `${Math.random() * 20 + 8}px`,
+                    transform: `rotate(${i * 30}deg) translateY(-45px) rotateX(45deg)`,
+                    animationName: 'voice-pulse',
+                    animationDuration: `${1 + Math.random() * 0.5}s`,
+                    animationTimingFunction: 'ease-in-out',
+                    animationIterationCount: 'infinite',
+                    animationDelay: `${i * 0.08}s`
+                  }}
+                />
+              ))}
             </div>
           )}
-          
-          {isProcessing && (
-            <div className="absolute -top-2 -left-2 bg-gradient-to-r from-cyan-500 to-blue-500 p-1.5 rounded-full">
-              <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+
+          {/* Speaking breathing animation - clean and minimal */}
+          {isSpeaking && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              {[...Array(8)].map((_, i) => (
+                <div
+                  key={`speaking-breath-${i}`}
+                  className="absolute w-1 bg-green-400 rounded-full"
+                  style={{
+                    height: `${Math.random() * 16 + 8}px`,
+                    transform: `rotate(${i * 45}deg) translateY(-50px)`,
+                    animationName: 'voice-pulse',
+                    animationDuration: `${0.8 + Math.random() * 0.4}s`,
+                    animationTimingFunction: 'ease-in-out',
+                    animationIterationCount: 'infinite',
+                    animationDelay: `${i * 0.1}s`,
+                    opacity: 0.7
+                  }}
+                />
+              ))}
             </div>
           )}
         </div>
@@ -300,19 +351,24 @@ export default function VoiceAssistant() {
         {/* Status */}
         <div className="text-center">
           <p className="text-xs sm:text-sm text-gray-400 font-mono">
-            {isProcessing ? '[ PROCESSING COMMAND... ]' : isListening ? '[ LISTENING... AUTO-STOPS AFTER 10s SILENCE ]' : '[ READY ]'}
+            {isProcessing 
+              ? '[ PROCESSING COMMAND... ]' 
+              : isListening 
+              ? '[ LISTENING... SPEAK NOW ]' 
+              : '[ READY TO LISTEN ]'
+            }
           </p>
           {isListening && !isProcessing && (
             <p className="text-[10px] sm:text-xs text-cyan-400 font-mono mt-1">
-              Click STOP to end manually or wait 10s of silence
+              Speak now - will process automatically
             </p>
           )}
           {isProcessing && (
             <div className="flex items-center justify-center mt-2">
               <div className="flex space-x-1">
-                <div className="w-2 h-2 bg-cyan-400 rounded-full animate-pulse"></div>
-                <div className="w-2 h-2 bg-cyan-400 rounded-full animate-pulse" style={{animationDelay: '0.2s'}}></div>
-                <div className="w-2 h-2 bg-cyan-400 rounded-full animate-pulse" style={{animationDelay: '0.4s'}}></div>
+                <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"></div>
+                <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
               </div>
             </div>
           )}
@@ -321,14 +377,14 @@ export default function VoiceAssistant() {
         {/* Transcript & Response */}
         <div className="w-full space-y-2 sm:space-y-3">
           {transcript && (
-            <div className="bg-zinc-800/50 border border-zinc-700 p-3 sm:p-4">
+            <div className="bg-zinc-800/50 border border-zinc-700 p-3 sm:p-4 rounded-lg">
               <p className="text-[10px] sm:text-xs text-cyan-400 mb-1 sm:mb-2">&gt; INPUT:</p>
               <p className="text-xs sm:text-sm text-gray-300 break-words">{transcript}</p>
             </div>
           )}
 
           {response && (
-            <div className="bg-zinc-800/50 border border-zinc-700 p-3 sm:p-4">
+            <div className="bg-zinc-800/50 border border-zinc-700 p-3 sm:p-4 rounded-lg">
               <p className="text-[10px] sm:text-xs text-green-400 mb-1 sm:mb-2">&gt; OUTPUT:</p>
               <div className="text-xs sm:text-sm text-gray-300 break-words whitespace-pre-line">
                 {renderResponse(response)}
@@ -337,14 +393,9 @@ export default function VoiceAssistant() {
           )}
 
           {!transcript && !response && (
-            <div className="text-center py-6 sm:py-8 border border-dashed border-zinc-800">
-              <p className="text-[10px] sm:text-xs text-gray-600 font-mono mb-2">
+            <div className="text-center py-6 sm:py-8 border border-dashed border-zinc-800 rounded-lg">
+              <p className="text-[10px] sm:text-xs text-gray-600 font-mono">
                 VOICE_COMMANDS_READY
-              </p>
-              <p className="text-[9px] sm:text-[10px] text-gray-700 font-mono">
-                • Click START and speak your command<br/>
-                • Auto-stops after 10 seconds of silence<br/>
-                • Or click STOP to end manually
               </p>
             </div>
           )}

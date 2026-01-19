@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { CheckCircle2, Circle, Trash2, Clock, Edit3, CheckCheck, XCircle } from 'lucide-react';
+import { CheckCircle2, Circle, Trash2, Clock, Edit3, CheckCheck, XCircle, Plus } from 'lucide-react';
 import api from '@/lib/api';
 import TaskEditModal from './TaskEditModal';
 import { formatDateTimeIST } from '@/lib/timeUtils';
@@ -22,7 +22,7 @@ export default function TaskList() {
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
     isOpen: boolean;
     task: Task | null;
-    type: 'single' | 'all' | 'markAllDone' | 'markAllUndone';
+    type: 'single' | 'all' | 'toggleAll';
   }>({
     isOpen: false,
     task: null,
@@ -129,23 +129,24 @@ export default function TaskList() {
     setDeleteConfirmation({ isOpen: true, task: null, type: 'all' });
   };
 
-  const showMarkAllDoneConfirmation = () => {
-    setDeleteConfirmation({ isOpen: true, task: null, type: 'markAllDone' });
+  const showToggleAllConfirmation = () => {
+    setDeleteConfirmation({ isOpen: true, task: null, type: 'toggleAll' });
   };
 
-  const showMarkAllUndoneConfirmation = () => {
-    setDeleteConfirmation({ isOpen: true, task: null, type: 'markAllUndone' });
-  };
+  // Check if all tasks are completed
+  const allTasksCompleted = tasks.length > 0 && tasks.every(task => task.completed);
 
   const handleConfirmDelete = () => {
     if (deleteConfirmation.type === 'single' && deleteConfirmation.task) {
       deleteTask(deleteConfirmation.task._id);
     } else if (deleteConfirmation.type === 'all') {
       deleteAllTasks();
-    } else if (deleteConfirmation.type === 'markAllDone') {
-      markAllTasksCompleted();
-    } else if (deleteConfirmation.type === 'markAllUndone') {
-      markAllTasksIncomplete();
+    } else if (deleteConfirmation.type === 'toggleAll') {
+      if (allTasksCompleted) {
+        markAllTasksIncomplete();
+      } else {
+        markAllTasksCompleted();
+      }
     }
   };
 
@@ -155,6 +156,11 @@ export default function TaskList() {
 
   const openEditModal = (task: Task) => {
     setEditingTask(task);
+    setIsEditModalOpen(true);
+  };
+
+  const openCreateModal = () => {
+    setEditingTask(null); // null means create new task
     setIsEditModalOpen(true);
   };
 
@@ -178,21 +184,26 @@ export default function TaskList() {
           {tasks.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-3">
               <button
-                onClick={showMarkAllDoneConfirmation}
-                className="text-green-500 hover:text-green-400 text-[10px] sm:text-xs font-mono px-2 py-1 border border-green-800 hover:border-green-600 transition-colors flex items-center gap-1"
+                onClick={showToggleAllConfirmation}
+                className={`${
+                  allTasksCompleted 
+                    ? 'text-yellow-500 hover:text-yellow-400 border-yellow-800 hover:border-yellow-600' 
+                    : 'text-green-500 hover:text-green-400 border-green-800 hover:border-green-600'
+                } text-[10px] sm:text-xs font-mono px-2 py-1 border transition-colors flex items-center gap-1`}
               >
-                <CheckCheck className="w-3 h-3" />
-                <span className="hidden sm:inline">MARK_ALL_DONE</span>
-                <span className="sm:hidden">DONE</span>
-              </button>
-              
-              <button
-                onClick={showMarkAllUndoneConfirmation}
-                className="text-yellow-500 hover:text-yellow-400 text-[10px] sm:text-xs font-mono px-2 py-1 border border-yellow-800 hover:border-yellow-600 transition-colors flex items-center gap-1"
-              >
-                <XCircle className="w-3 h-3" />
-                <span className="hidden sm:inline">MARK_ALL_UNDONE</span>
-                <span className="sm:hidden">UNDONE</span>
+                {allTasksCompleted ? (
+                  <>
+                    <XCircle className="w-3 h-3" />
+                    <span className="hidden sm:inline">MARK_ALL_UNDONE</span>
+                    <span className="sm:hidden">UNDONE</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCheck className="w-3 h-3" />
+                    <span className="hidden sm:inline">MARK_ALL_DONE</span>
+                    <span className="sm:hidden">DONE</span>
+                  </>
+                )}
               </button>
               
               <button
@@ -205,6 +216,18 @@ export default function TaskList() {
               </button>
             </div>
           )}
+
+          {/* Add Task Button */}
+          <div className="mt-3">
+            <button
+              onClick={openCreateModal}
+              className="text-cyan-500 hover:text-cyan-400 text-[10px] sm:text-xs font-mono px-2 py-1 border border-cyan-800 hover:border-cyan-600 transition-colors flex items-center gap-1"
+            >
+              <Plus className="w-3 h-3" />
+              <span className="hidden sm:inline">ADD_TASK</span>
+              <span className="sm:hidden">ADD</span>
+            </button>
+          </div>
         </div>
         
         <div className="space-y-2 max-h-[400px] sm:max-h-[600px] overflow-y-auto pr-1 sm:pr-2">
@@ -317,22 +340,19 @@ export default function TaskList() {
                     This will permanently delete all tasks and cannot be undone.
                   </p>
                 </div>
-              ) : deleteConfirmation.type === 'markAllDone' ? (
+              ) : deleteConfirmation.type === 'toggleAll' ? (
                 <div>
                   <p className="text-gray-200 text-sm font-mono mb-2">
-                    Mark all {tasks.length} tasks as completed?
+                    {allTasksCompleted 
+                      ? `Mark all ${tasks.length} tasks as incomplete?`
+                      : `Mark all ${tasks.length} tasks as completed?`
+                    }
                   </p>
-                  <p className="text-green-400 text-xs font-mono">
-                    All tasks will be marked as done. You can undo this action later.
-                  </p>
-                </div>
-              ) : deleteConfirmation.type === 'markAllUndone' ? (
-                <div>
-                  <p className="text-gray-200 text-sm font-mono mb-2">
-                    Mark all {tasks.length} tasks as incomplete?
-                  </p>
-                  <p className="text-yellow-400 text-xs font-mono">
-                    All tasks will be marked as not done. You can undo this action later.
+                  <p className={`text-xs font-mono ${allTasksCompleted ? 'text-yellow-400' : 'text-green-400'}`}>
+                    {allTasksCompleted 
+                      ? 'All tasks will be marked as not done. You can undo this action later.'
+                      : 'All tasks will be marked as done. You can undo this action later.'
+                    }
                   </p>
                 </div>
               ) : null}
@@ -348,10 +368,10 @@ export default function TaskList() {
               <button
                 onClick={handleConfirmDelete}
                 className={`flex-1 px-4 py-2 text-xs font-mono border transition-colors ${
-                  deleteConfirmation.type === 'markAllDone' 
-                    ? 'bg-green-900 hover:bg-green-800 text-green-100 border-green-700'
-                    : deleteConfirmation.type === 'markAllUndone'
-                    ? 'bg-yellow-900 hover:bg-yellow-800 text-yellow-100 border-yellow-700'
+                  deleteConfirmation.type === 'toggleAll' 
+                    ? allTasksCompleted
+                      ? 'bg-yellow-900 hover:bg-yellow-800 text-yellow-100 border-yellow-700'
+                      : 'bg-green-900 hover:bg-green-800 text-green-100 border-green-700'
                     : 'bg-red-900 hover:bg-red-800 text-red-100 border-red-700'
                 }`}
               >
@@ -359,9 +379,9 @@ export default function TaskList() {
                   ? 'DELETE' 
                   : deleteConfirmation.type === 'all'
                   ? 'DELETE_ALL'
-                  : deleteConfirmation.type === 'markAllDone'
-                  ? 'MARK_ALL_DONE'
-                  : 'MARK_ALL_UNDONE'
+                  : deleteConfirmation.type === 'toggleAll'
+                  ? allTasksCompleted ? 'MARK_ALL_UNDONE' : 'MARK_ALL_DONE'
+                  : 'CONFIRM'
                 }
               </button>
             </div>
