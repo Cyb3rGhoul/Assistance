@@ -2,6 +2,7 @@ import cron from 'node-cron';
 import Task from '../models/Task.js';
 import User from '../models/User.js';
 import { sendTaskReminder, sendMorningSummary, sendEveningReport } from './emailService.js';
+import { sendTaskReminderWhatsApp, sendMorningSummaryWhatsApp, sendEveningReportWhatsApp } from './whatsappService.js';
 
 export const startReminderCron = () => {
   console.log('Reminder service started');
@@ -34,13 +35,25 @@ export const startReminderCron = () => {
             continue;
           }
           
-          // Send reminder to user's email
-          const emailSent = await sendTaskReminder(task, user.email, user.resendApiKey);
+          // Send reminder to user's email (if enabled)
+          let emailSent = false;
+          if (user.emailEnabled && user.resendApiKey) {
+            emailSent = await sendTaskReminder(task, user.email, user.resendApiKey);
+          }
           
-          if (emailSent) {
+          // Send WhatsApp reminder (if enabled and configured)
+          let whatsappSent = false;
+          if (user.whatsappEnabled && user.whatsappApiKey) {
+            const whatsappPhone = user.whatsappPhone || user.phone;
+            if (whatsappPhone) {
+              whatsappSent = await sendTaskReminderWhatsApp(task, whatsappPhone, user.whatsappApiKey);
+            }
+          }
+          
+          if (emailSent || whatsappSent) {
             task.reminderSent = true;
             await task.save();
-            console.log(`Reminder sent: ${task.title}`);
+            console.log(`Reminder sent: ${task.title} (Email: ${emailSent}, WhatsApp: ${whatsappSent})`);
           }
         }
       }
@@ -74,7 +87,18 @@ export const startReminderCron = () => {
         });
         
         if (tasks.length > 0) {
-          await sendMorningSummary(user.email, tasks, user.resendApiKey);
+          // Send email morning summary (if enabled)
+          if (user.emailEnabled && user.resendApiKey) {
+            await sendMorningSummary(user.email, tasks, user.resendApiKey);
+          }
+          
+          // Send WhatsApp morning summary (if enabled and configured)
+          if (user.whatsappEnabled && user.whatsappApiKey) {
+            const whatsappPhone = user.whatsappPhone || user.phone;
+            if (whatsappPhone) {
+              await sendMorningSummaryWhatsApp(tasks, whatsappPhone, user.whatsappApiKey);
+            }
+          }
         }
       }
     } catch (error) {
@@ -109,8 +133,18 @@ export const startReminderCron = () => {
           completed: false
         });
         
-        // Send evening report to all users
-        await sendEveningReport(user.email, completedTasks, pendingTasks, user.resendApiKey);
+        // Send evening report (if email enabled)
+        if (user.emailEnabled && user.resendApiKey) {
+          await sendEveningReport(user.email, completedTasks, pendingTasks, user.resendApiKey);
+        }
+        
+        // Send WhatsApp evening report (if enabled and configured)
+        if (user.whatsappEnabled && user.whatsappApiKey) {
+          const whatsappPhone = user.whatsappPhone || user.phone;
+          if (whatsappPhone) {
+            await sendEveningReportWhatsApp(completedTasks, pendingTasks, whatsappPhone, user.whatsappApiKey);
+          }
+        }
       }
     } catch (error) {
       console.error('Evening report error:', error);

@@ -20,6 +20,14 @@ const userSchema = new mongoose.Schema({
   // Resend API key for email notifications (REQUIRED for all users)
   resendApiKey: { type: String, required: true },
   
+  // WhatsApp API configuration (OPTIONAL)
+  whatsappApiKey: { type: String }, // Whatabot API key for WhatsApp reminders
+  whatsappPhone: { type: String }, // User's WhatsApp phone number (with country code) - defaults to main phone
+  whatsappEnabled: { type: Boolean, default: false }, // Toggle for WhatsApp reminders
+  
+  // Notification preferences
+  emailEnabled: { type: Boolean, default: true }, // Toggle for email reminders (always enabled by default)
+  
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });

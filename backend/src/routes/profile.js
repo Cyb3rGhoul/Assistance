@@ -1,6 +1,7 @@
 import express from 'express';
 import User from '../models/User.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { testWhatsAppConnection } from '../services/whatsappService.js';
 
 const router = express.Router();
 
@@ -25,6 +26,10 @@ router.get('/', authenticateToken, async (req, res) => {
       hasApiKey2: !!user.geminiApiKey2,
       currentApiKeyIndex: user.currentApiKeyIndex,
       hasResendApiKey: !!user.resendApiKey,
+      hasWhatsAppApiKey: !!user.whatsappApiKey,
+      whatsappPhone: user.whatsappPhone,
+      whatsappEnabled: user.whatsappEnabled,
+      emailEnabled: user.emailEnabled,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt
     };
@@ -34,6 +39,9 @@ router.get('/', authenticateToken, async (req, res) => {
       profileData.currentGeminiApiKey1 = user.geminiApiKey1;
       profileData.currentGeminiApiKey2 = user.geminiApiKey2;
       profileData.currentResendApiKey = user.resendApiKey;
+      profileData.currentWhatsAppApiKey = user.whatsappApiKey;
+      profileData.currentVoiceAppId = user.voiceAppId;
+      profileData.currentVoiceAppCertificate = user.voiceAppCertificate;
     }
     
     res.json(profileData);
@@ -46,7 +54,17 @@ router.get('/', authenticateToken, async (req, res) => {
 // Update user profile
 router.put('/', authenticateToken, async (req, res) => {
   try {
-    const { name, phone, geminiApiKey1, geminiApiKey2, resendApiKey } = req.body;
+    const { 
+      name, 
+      phone, 
+      geminiApiKey1, 
+      geminiApiKey2, 
+      resendApiKey, 
+      whatsappApiKey, 
+      whatsappPhone,
+      whatsappEnabled,
+      emailEnabled
+    } = req.body;
     
     const user = await User.findById(req.user.userId);
     if (!user) {
@@ -56,6 +74,22 @@ router.put('/', authenticateToken, async (req, res) => {
     // Update basic info
     if (name) user.name = name;
     if (phone !== undefined) user.phone = phone;
+    
+    // Update WhatsApp configuration
+    if (whatsappApiKey !== undefined) {
+      user.whatsappApiKey = whatsappApiKey.trim() || null;
+    }
+    if (whatsappPhone !== undefined) {
+      user.whatsappPhone = whatsappPhone.trim() || null;
+    }
+    if (whatsappEnabled !== undefined) {
+      user.whatsappEnabled = whatsappEnabled;
+    }
+    
+    // Update notification preferences
+    if (emailEnabled !== undefined) {
+      user.emailEnabled = emailEnabled;
+    }
     
     // Update Resend API key
     if (resendApiKey !== undefined) {
@@ -102,6 +136,10 @@ router.put('/', authenticateToken, async (req, res) => {
         hasApiKey2: !!user.geminiApiKey2,
         currentApiKeyIndex: user.currentApiKeyIndex,
         hasResendApiKey: !!user.resendApiKey,
+        hasWhatsAppApiKey: !!user.whatsappApiKey,
+        whatsappPhone: user.whatsappPhone,
+        whatsappEnabled: user.whatsappEnabled,
+        emailEnabled: user.emailEnabled,
         updatedAt: user.updatedAt
       }
     });
@@ -133,6 +171,32 @@ router.post('/switch-api-key', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Switch API key error:', error);
     res.status(500).json({ error: 'Failed to switch API key' });
+  }
+});
+
+// Test WhatsApp connection
+router.post('/test-whatsapp', authenticateToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    const whatsappPhone = user.whatsappPhone || user.phone;
+    if (!user.whatsappApiKey || !whatsappPhone) {
+      return res.status(400).json({ error: 'WhatsApp API key and phone number are required' });
+    }
+    
+    const success = await testWhatsAppConnection(whatsappPhone, user.whatsappApiKey);
+    
+    if (success) {
+      res.json({ message: 'WhatsApp test message sent successfully!' });
+    } else {
+      res.status(500).json({ error: 'Failed to send WhatsApp test message. Please check your API key and phone number.' });
+    }
+  } catch (error) {
+    console.error('WhatsApp test error:', error);
+    res.status(500).json({ error: 'Failed to test WhatsApp connection' });
   }
 });
 

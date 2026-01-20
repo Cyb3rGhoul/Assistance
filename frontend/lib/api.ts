@@ -17,6 +17,7 @@ export const api = {
       get: `${API_URL}/api/profile`,
       update: `${API_URL}/api/profile`,
       switchApiKey: `${API_URL}/api/profile/switch-api-key`,
+      testWhatsApp: `${API_URL}/api/profile/test-whatsapp`,
     },
     tasks: {
       list: `${API_URL}/api/tasks`,
