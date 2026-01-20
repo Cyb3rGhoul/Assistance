@@ -270,18 +270,18 @@ export default function TaskList() {
                     )}
                   </div>
 
-                  <div className="flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex items-center gap-3 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                     <button
                       onClick={() => openEditModal(task)}
-                      className="text-cyan-500 hover:text-cyan-400 flex-shrink-0 active:scale-90 transition-transform p-2 sm:p-1"
+                      className="text-cyan-500 hover:text-cyan-400 flex-shrink-0 active:scale-90 transition-transform p-1"
                     >
-                      <Edit3 className="w-4 h-4 sm:w-4 sm:h-4" />
+                      <Edit3 className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => showDeleteConfirmation(task)}
-                      className="text-red-500 hover:text-red-400 flex-shrink-0 active:scale-90 transition-transform p-2 sm:p-1"
+                      className="text-red-500 hover:text-red-400 flex-shrink-0 active:scale-90 transition-transform p-1"
                     >
-                      <Trash2 className="w-4 h-4 sm:w-4 sm:h-4" />
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                 </div>

@@ -71,8 +71,6 @@ async function callGeminiWithFailover(userId, prompt, isRetry = false) {
 function parseTimeToIST(timeString) {
   if (!timeString) return null;
   
-  const istOffset = 5.5 * 60 * 60 * 1000; // IST is UTC+5:30
-  
   try {
     // Parse the ISO string from AI
     const parsedDate = new Date(timeString);
@@ -82,12 +80,22 @@ function parseTimeToIST(timeString) {
       return parseManualTime(timeString);
     }
     
-    // The AI provides times like "2024-01-17T14:35:00.000Z" when user says "2:35 PM IST"
-    // We want this to display as 2:35 PM when shown in IST timezone
-    // So we need to subtract the IST offset to get the correct UTC time
+    // The AI gives us a time like "2026-01-21T10:00:00.000Z" when user says "10:00 AM tomorrow"
+    // We need to treat this as IST time and convert to UTC for storage
     
-    // The AI's time represents the desired IST time, so convert to UTC
-    return new Date(parsedDate.getTime() - istOffset);
+    // Extract components from AI's time (treating it as IST)
+    const year = parsedDate.getUTCFullYear();
+    const month = parsedDate.getUTCMonth();
+    const day = parsedDate.getUTCDate();
+    const hours = parsedDate.getUTCHours();
+    const minutes = parsedDate.getUTCMinutes();
+    
+    // Create UTC time that represents the IST time
+    // IST is UTC+5:30, so to store IST time as UTC, we subtract 5:30
+    const utcTime = Date.UTC(year, month, day, hours, minutes, 0, 0);
+    const istOffsetMs = 5.5 * 60 * 60 * 1000; // 5 hours 30 minutes in milliseconds
+    
+    return new Date(utcTime - istOffsetMs);
     
   } catch (error) {
     console.error('Time parsing error:', error);
@@ -97,23 +105,30 @@ function parseTimeToIST(timeString) {
 
 // Fallback manual time parsing
 function parseManualTime(timeString) {
+  const lowerTime = timeString.toLowerCase();
+  
+  // Get current date in IST
   const now = new Date();
   const istOffset = 5.5 * 60 * 60 * 1000;
   const nowIST = new Date(now.getTime() + istOffset);
   
-  const lowerTime = timeString.toLowerCase();
-  let targetDate = new Date(nowIST);
+  let targetYear = nowIST.getUTCFullYear();
+  let targetMonth = nowIST.getUTCMonth();
+  let targetDay = nowIST.getUTCDate();
   
+  // Adjust date based on keywords
   if (lowerTime.includes('tomorrow')) {
-    targetDate.setDate(targetDate.getDate() + 1);
-  } else if (lowerTime.includes('today')) {
-    // Keep current date
+    targetDay += 1;
   } else if (lowerTime.includes('next week')) {
-    targetDate.setDate(targetDate.getDate() + 7);
+    targetDay += 7;
   }
+  // 'today' or no date keyword uses current date
   
   // Extract time
   const timeMatch = lowerTime.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/);
+  let targetHours = 0;
+  let targetMinutes = 0;
+  
   if (timeMatch) {
     let hours = parseInt(timeMatch[1]);
     const minutes = parseInt(timeMatch[2] || '0');
@@ -122,13 +137,14 @@ function parseManualTime(timeString) {
     if (ampm === 'pm' && hours !== 12) hours += 12;
     if (ampm === 'am' && hours === 12) hours = 0;
     
-    targetDate.setHours(hours, minutes, 0, 0);
-    
-    // Convert IST to UTC for storage
-    return new Date(targetDate.getTime() - istOffset);
+    targetHours = hours;
+    targetMinutes = minutes;
   }
   
-  return null;
+  // Create UTC time that represents the IST time
+  const utcTime = Date.UTC(targetYear, targetMonth, targetDay, targetHours, targetMinutes, 0, 0);
+  
+  return new Date(utcTime - istOffset);
 }
 
 router.post('/process', async (req, res) => {
