@@ -5,8 +5,6 @@ import { sendTaskReminder, sendMorningSummary, sendEveningReport } from './email
 import { sendTaskReminderWhatsApp, sendMorningSummaryWhatsApp, sendEveningReportWhatsApp } from './whatsappService.js';
 
 export const startReminderCron = () => {
-  console.log('Reminder service started');
-  
   // Check every 5 minutes for task reminders (5 min before due time)
   cron.schedule('*/5 * * * *', async () => {
     try {
@@ -24,8 +22,6 @@ export const startReminderCron = () => {
 
       // Only log when there are actual reminders to send
       if (tasks.length > 0) {
-        console.log(`Sending ${tasks.length} reminder(s)`);
-        
         for (const task of tasks) {
           // Get full user data to access resendApiKey
           const User = (await import('../models/User.js')).default;
@@ -53,7 +49,6 @@ export const startReminderCron = () => {
           if (emailSent || whatsappSent) {
             task.reminderSent = true;
             await task.save();
-            console.log(`Reminder sent: ${task.title} (Email: ${emailSent}, WhatsApp: ${whatsappSent})`);
           }
         }
       }

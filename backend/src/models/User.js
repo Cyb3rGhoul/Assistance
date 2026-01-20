@@ -12,13 +12,13 @@ const userSchema = new mongoose.Schema({
   profilePicture: { type: String },
   isOAuthUser: { type: Boolean, default: false },
   
-  // Gemini API keys with failover support (REQUIRED for all users)
+  // Gemini API keys with failover support (REQUIRED - at least one key needed)
   geminiApiKey1: { type: String, required: true }, // Primary API key (required)
   geminiApiKey2: { type: String }, // Secondary API key for failover (optional)
   currentApiKeyIndex: { type: Number, default: 1 }, // 1 for primary, 2 for secondary
   
-  // Resend API key for email notifications (REQUIRED for all users)
-  resendApiKey: { type: String, required: true },
+  // Resend API key for email notifications (OPTIONAL - required only for email reminders)
+  resendApiKey: { type: String },
   
   // WhatsApp API configuration (OPTIONAL)
   whatsappApiKey: { type: String }, // Whatabot API key for WhatsApp reminders

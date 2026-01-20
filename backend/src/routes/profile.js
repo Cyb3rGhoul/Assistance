@@ -93,10 +93,7 @@ router.put('/', authenticateToken, async (req, res) => {
     
     // Update Resend API key
     if (resendApiKey !== undefined) {
-      if (!resendApiKey.trim()) {
-        return res.status(400).json({ error: 'Resend API key is required for email notifications' });
-      }
-      user.resendApiKey = resendApiKey.trim();
+      user.resendApiKey = resendApiKey.trim() || null;
     }
     
     // Update API keys
@@ -116,9 +113,11 @@ router.put('/', authenticateToken, async (req, res) => {
       }
     }
     
-    // Ensure at least one API key exists for all users
-    if (!user.geminiApiKey1 && !user.geminiApiKey2) {
-      return res.status(400).json({ error: 'At least one Gemini API key is required for all users' });
+    // Ensure at least one Gemini API key exists (required for all users)
+    if (geminiApiKey1 !== undefined || geminiApiKey2 !== undefined) {
+      if (!user.geminiApiKey1 && !user.geminiApiKey2) {
+        return res.status(400).json({ error: 'At least one Gemini API key is required' });
+      }
     }
     
     await user.save();

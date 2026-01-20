@@ -142,10 +142,10 @@ router.get('/google/callback', async (req, res) => {
   }
 });
 
-// Complete OAuth signup with API key
+// Complete OAuth signup with optional API keys
 router.post('/google/complete-signup', async (req, res) => {
   try {
-    const { geminiApiKey, resendApiKey } = req.body;
+    const { geminiApiKey, resendApiKey, whatsappApiKey } = req.body;
     const authHeader = req.headers.authorization;
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -165,12 +165,9 @@ router.post('/google/complete-signup', async (req, res) => {
       return res.status(401).json({ error: 'Invalid or expired token' });
     }
     
-    if (!geminiApiKey) {
+    // Gemini API key is required for all users
+    if (!geminiApiKey || !geminiApiKey.trim()) {
       return res.status(400).json({ error: 'Gemini API key is required' });
-    }
-    
-    if (!resendApiKey) {
-      return res.status(400).json({ error: 'Resend API key is required for email notifications' });
     }
     
     // Check if user already exists
@@ -185,18 +182,26 @@ router.post('/google/complete-signup', async (req, res) => {
       return res.status(400).json({ error: 'User already exists' });
     }
     
-    // Create new user with Google OAuth data
-    const user = new User({
+    // Create new user with Google OAuth data and required Gemini API key
+    const userData = {
       googleId: googleData.googleId,
       email: googleData.email,
       name: googleData.name,
       profilePicture: googleData.profilePicture,
       isOAuthUser: true,
-      geminiApiKey1: geminiApiKey,
-      resendApiKey: resendApiKey,
+      geminiApiKey1: geminiApiKey.trim(), // Required
       currentApiKeyIndex: 1
-    });
-    
+    };
+
+    // Add optional API keys if provided
+    if (resendApiKey && resendApiKey.trim()) {
+      userData.resendApiKey = resendApiKey.trim();
+    }
+    if (whatsappApiKey && whatsappApiKey.trim()) {
+      userData.whatsappApiKey = whatsappApiKey.trim();
+    }
+
+    const user = new User(userData);
     await user.save();
     
     // Generate JWT token

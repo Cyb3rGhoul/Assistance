@@ -386,8 +386,7 @@ Return format:
               response += `${index + 1}. ${task.title}`;
               if (task.description) response += ` - ${task.description}`;
               if (task.reminderTime) {
-                const reminderIST = new Date(task.reminderTime.getTime() + 5.5 * 60 * 60 * 1000);
-                response += ` - Reminder: ${reminderIST.toLocaleString('en-US', { timeZone: 'Asia/Kolkata', hour12: true })} IST`;
+                response += ` - Reminder: ${task.reminderTime.toLocaleString('en-US', { timeZone: 'Asia/Kolkata', hour12: true })} IST`;
               }
               response += `\n`;
             });
@@ -469,8 +468,7 @@ Return format:
             fieldDescriptions.push(`due date to ${dueDateIST ? dueDateIST.toLocaleString('en-US', { timeZone: 'Asia/Kolkata', hour12: true }) + ' IST' : 'none'}`);
           }
           if (updateData.reminderTime !== undefined) {
-            const reminderIST = updateData.reminderTime ? new Date(updateData.reminderTime.getTime() + 5.5 * 60 * 60 * 1000) : null;
-            fieldDescriptions.push(`reminder time to ${reminderIST ? reminderIST.toLocaleString('en-US', { timeZone: 'Asia/Kolkata', hour12: true }) + ' IST' : 'none'}`);
+            fieldDescriptions.push(`reminder time to ${updateData.reminderTime ? updateData.reminderTime.toLocaleString('en-US', { timeZone: 'Asia/Kolkata', hour12: true }) + ' IST' : 'none'}`);
           }
           
           responseText += fieldDescriptions.join(', ');

@@ -33,7 +33,6 @@ export const sendWhatsAppReminder = async (message, phoneNumber, apiKey) => {
     });
     
     if (response.ok) {
-      console.log(`Whatabot reminder sent successfully to ${phoneNumber}`);
       return true;
     } else {
       console.error(`Whatabot reminder failed: HTTP ${response.status}`);
