@@ -58,7 +58,7 @@ export const startReminderCron = () => {
   });
 
   // Morning summary at 8:00 AM IST every day
-  cron.schedule('30 2 * * *', async () => { // 2:30 UTC = 8:00 AM IST
+  cron.schedule('0 8 * * *', async () => { // 8:00 AM IST
     try {
       const users = await User.find();
       
@@ -102,7 +102,7 @@ export const startReminderCron = () => {
   });
 
   // Evening report at 8:00 PM IST every day
-  cron.schedule('30 14 * * *', async () => { // 14:30 UTC = 8:00 PM IST
+  cron.schedule('0 20 * * *', async () => { // 20:00 IST = 8:00 PM IST
     try {
       const users = await User.find();
       

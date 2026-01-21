@@ -26,9 +26,16 @@ router.post('/', async (req, res) => {
 
 router.put('/:id', async (req, res) => {
   try {
+    const updateData = { ...req.body, updatedAt: Date.now() };
+    
+    // If reminderTime is being updated, reset reminderSent to false
+    if (req.body.reminderTime !== undefined) {
+      updateData.reminderSent = false;
+    }
+    
     const task = await Task.findOneAndUpdate(
       { _id: req.params.id, userId: req.user.userId },
-      { ...req.body, updatedAt: Date.now() },
+      updateData,
       { new: true }
     );
     res.json(task);

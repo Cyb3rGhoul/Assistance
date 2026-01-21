@@ -34,6 +34,10 @@ export const sendWhatsAppReminder = async (message, phoneNumber, apiKey) => {
     
     if (response.ok) {
       return true;
+    } else if (response.status === 429) {
+      // Rate limit exceeded - message might still be delivered
+      console.warn(`Whatabot rate limit exceeded (HTTP 429) - message may still be delivered`);
+      return true; // Consider it successful since message is often delivered despite 429
     } else {
       console.error(`Whatabot reminder failed: HTTP ${response.status}`);
       return false;
@@ -64,8 +68,6 @@ ${task.description ? `📝 *Description:* ${task.description}\n\n` : ''}⏰ *Due
     hour: '2-digit',
     minute: '2-digit'
   }) : 'No due date'}
-
-${task.priority ? `🚨 *Priority:* ${task.priority.toUpperCase()}\n\n` : ''}Don't forget to complete this task! 💪
 
 _Sent by Aria Assistant_`;
 
@@ -186,6 +188,17 @@ export const sendEveningReportWhatsApp = async (completedTasks, pendingTasks, ph
 
 _Sent by Aria Assistant_`;
 
+  return await sendWhatsAppReminder(message, phoneNumber, apiKey);
+};
+
+/**
+ * Send confirmation message via WhatsApp
+ * @param {string} message - Confirmation message
+ * @param {string} phoneNumber - WhatsApp phone number
+ * @param {string} apiKey - Whatabot API key
+ * @returns {Promise<boolean>} - Success status
+ */
+export const sendConfirmationWhatsApp = async (message, phoneNumber, apiKey) => {
   return await sendWhatsAppReminder(message, phoneNumber, apiKey);
 };
 

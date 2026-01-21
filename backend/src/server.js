@@ -8,6 +8,7 @@ import profileRoutes from './routes/profile.js';
 import taskRoutes from './routes/tasks.js';
 import voiceRoutes from './routes/voice.js';
 import linkRoutes from './routes/links.js';
+import whatsappRoutes from './routes/whatsapp.js';
 import { startReminderCron } from './services/reminderService.js';
 import { startKeepAlive } from './services/keepAliveService.js';
 
@@ -28,6 +29,7 @@ app.use('/api/profile', profileRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/voice', voiceRoutes);
 app.use('/api/links', linkRoutes);
+app.use('/api/whatsapp', whatsappRoutes);
 
 // Health check endpoint for keep-alive
 app.get('/api/health', (req, res) => {

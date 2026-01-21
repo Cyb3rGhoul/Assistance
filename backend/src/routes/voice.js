@@ -457,6 +457,8 @@ Return format:
           }
           if (parsed.updateFields.reminderTime !== null && parsed.updateFields.reminderTime !== undefined) {
             updateData.reminderTime = parsed.updateFields.reminderTime ? parseTimeToIST(parsed.updateFields.reminderTime) : null;
+            // Reset reminderSent when reminderTime is updated
+            updateData.reminderSent = false;
           }
         }
 
