@@ -218,27 +218,81 @@ export default function LinksManager() {
   const fetchLinks = async () => {
     try {
       const token = localStorage.getItem('token');
+      if (!token) {
+        console.error('No token found');
+        setLinks([]);
+        setFilteredLinks([]);
+        return;
+      }
+      
       const res = await fetch(api.endpoints.links.list, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
+      
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          // Token expired or invalid
+          localStorage.removeItem('token');
+          window.location.href = '/login';
+          return;
+        }
+        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      }
+      
       const data = await res.json();
-      setLinks(data);
-      setFilteredLinks(data);
+      
+      // Ensure data is an array
+      if (Array.isArray(data)) {
+        setLinks(data);
+        setFilteredLinks(data);
+      } else {
+        console.error('Links data is not an array:', data);
+        setLinks([]);
+        setFilteredLinks([]);
+      }
     } catch (error) {
       console.error('Error fetching links:', error);
+      setLinks([]); // Set empty array on error to prevent map error
+      setFilteredLinks([]);
     }
   };
 
   const fetchMetadata = async () => {
     try {
       const token = localStorage.getItem('token');
+      if (!token) {
+        console.error('No token found');
+        setMetadata({ categories: [], allTags: [] });
+        return;
+      }
+      
       const res = await fetch(api.endpoints.links.metadata, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
+      
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          // Token expired or invalid - already handled in fetchLinks
+          return;
+        }
+        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      }
+      
       const data = await res.json();
-      setMetadata(data);
+      
+      // Ensure data has the expected structure
+      if (data && typeof data === 'object') {
+        setMetadata({
+          categories: Array.isArray(data.categories) ? data.categories : [],
+          allTags: Array.isArray(data.allTags) ? data.allTags : []
+        });
+      } else {
+        console.error('Metadata data is not an object:', data);
+        setMetadata({ categories: [], allTags: [] });
+      }
     } catch (error) {
       console.error('Error fetching metadata:', error);
+      setMetadata({ categories: [], allTags: [] }); // Set empty arrays on error
     }
   };
 

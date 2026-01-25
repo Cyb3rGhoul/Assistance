@@ -32,13 +32,38 @@ export default function TaskList() {
   const fetchTasks = async () => {
     try {
       const token = localStorage.getItem('token');
+      if (!token) {
+        console.error('No token found');
+        setTasks([]);
+        return;
+      }
+      
       const res = await fetch(api.endpoints.tasks.list, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
+      
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          // Token expired or invalid
+          localStorage.removeItem('token');
+          window.location.href = '/login';
+          return;
+        }
+        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      }
+      
       const data = await res.json();
-      setTasks(data);
+      
+      // Ensure data is an array
+      if (Array.isArray(data)) {
+        setTasks(data);
+      } else {
+        console.error('Tasks data is not an array:', data);
+        setTasks([]);
+      }
     } catch (error) {
       console.error('Error fetching tasks:', error);
+      setTasks([]); // Set empty array on error to prevent map error
     }
   };
 
