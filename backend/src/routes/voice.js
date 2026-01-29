@@ -201,7 +201,14 @@ Current IST date and time: ${nowIST.toISOString()} (India Standard Time)${contex
 Available tasks:
 ${JSON.stringify(tasksList, null, 2)}
 
-Return format:
+MULTI-COMMAND SUPPORT:
+If the user gives multiple commands in one sentence, process ALL of them and return an array of actions.
+Examples:
+- "mark task1 as done and delete task2" → return array with complete and delete actions
+- "add new task and mark old task as complete" → return array with create and complete actions
+- "delete task1, mark task2 as done, and add remind me to call mom" → return array with delete, complete, and create actions
+
+Return format for SINGLE command:
 {
   "action": "create|list|listAll|update|delete|deleteAll|complete|sendEmail|saveLink|searchLinks|deleteLink|confirmDelete|confirmDeleteAll|confirmDeleteLink",
   "task": {
@@ -227,6 +234,25 @@ Return format:
   "response": "natural language response to user"
 }
 
+Return format for MULTIPLE commands:
+{
+  "multipleCommands": true,
+  "commands": [
+    {
+      "action": "...",
+      "task": {...},
+      "taskId": "...",
+      // ... other fields as needed for each command
+    },
+    {
+      "action": "...",
+      "task": {...},
+      // ... second command
+    }
+  ],
+  "response": "natural language response covering all actions performed"
+}
+
 IMPORTANT RULES:
 - For "update": Only include fields in "updateFields" that the user explicitly mentioned
 - For "update/delete/complete": Match the task by title from available tasks and set "taskId"
@@ -248,26 +274,23 @@ IMPORTANT RULES:
 - Convert 12-hour to 24-hour format: 6pm = 18:00, 6am = 06:00, 10:00 a.m. = 10:00, 10:00 p.m. = 22:00
 - For time-only updates (like "edit time to 10:00 a.m."), set both dueDate and reminderTime to today at that time
 - When user says "edit time" or "change time", they usually mean the reminder time
+- For multiple commands, process them in the order mentioned by the user
+- If any command in a multi-command sequence requires confirmation, handle it appropriately
 
 Examples:
-- "remind me to buy groceries tomorrow at 5pm" → action: create
-- "save this link https://example.com" → action: saveLink
-- "bookmark https://github.com/user/repo" → action: saveLink
-- "delete github link" → action: deleteLink (ask for confirmation first)
-- "what are my tasks today" → action: list
-- "what's on my plate today" → action: listAll
-- "tell me all my tasks" → action: listAll
-- "show me everything I have" → action: listAll
-- "mark buy groceries as complete" → action: complete, taskId: (match from tasks)
-- "delete meeting task" → action: delete (ask for confirmation first)
-- "yes delete it" → action: confirmDelete, taskId: (from previous context)
-- "delete all tasks" → action: deleteAll (ask for confirmation first)
-- "yes clear everything" → action: confirmDeleteAll
-- "send my tasks to email" → action: sendEmail
-- "search for react links" → action: searchLinks, searchQuery: "react"
-- "find links about javascript" → action: searchLinks, searchQuery: "javascript"
-- "show me image to 3d links" → action: searchLinks, searchQuery: "image 3d"
-- "get links for python" → action: searchLinks, searchQuery: "python"`;
+- "remind me to buy groceries tomorrow at 5pm" → single action: create
+- "mark buy groceries as done and add call mom at 3pm" → multiple commands: complete + create
+- "delete meeting task and mark presentation as complete" → multiple commands: delete + complete
+- "add new task, mark old task done, and delete another task" → multiple commands: create + complete + delete
+- "save this link https://example.com and mark task as done" → multiple commands: saveLink + complete
+- "what are my tasks today" → single action: list
+- "tell me all my tasks" → single action: listAll
+- "mark buy groceries as complete" → single action: complete
+- "delete meeting task" → single action: delete (ask for confirmation first)
+- "yes delete it" → single action: confirmDelete
+- "delete all tasks" → single action: deleteAll (ask for confirmation first)
+- "send my tasks to email" → single action: sendEmail
+- "search for react links" → single action: searchLinks`;
 
     // Use the new API key system with failover
     const aiResponse = await callGeminiWithFailover(req.user.userId, prompt);
@@ -277,24 +300,67 @@ Examples:
 
     let responseData = { ...parsed };
 
-    switch (parsed.action) {
-      case 'create':
-        // Parse times to IST
-        const taskData = { ...parsed.task, userId: req.user.userId };
-        
-        if (taskData.dueDate) {
-          taskData.dueDate = parseTimeToIST(taskData.dueDate);
-        }
-        if (taskData.reminderTime) {
-          taskData.reminderTime = parseTimeToIST(taskData.reminderTime);
-        }
-        
-        const newTask = new Task(taskData);
-        await newTask.save();
-        responseData.taskCreated = newTask;
-        break;
+    // Handle multiple commands
+    if (parsed.multipleCommands && parsed.commands) {
+      const results = [];
+      let overallResponse = [];
 
-      case 'saveLink':
+      for (const command of parsed.commands) {
+        try {
+          const result = await processCommand(command, req.user.userId);
+          results.push(result);
+          if (result.response) {
+            overallResponse.push(result.response);
+          }
+        } catch (error) {
+          results.push({ error: error.message, command: command.action });
+          overallResponse.push(`Error with ${command.action}: ${error.message}`);
+        }
+      }
+
+      responseData = {
+        multipleCommands: true,
+        results: results,
+        response: parsed.response || overallResponse.join(' ')
+      };
+    } else {
+      // Handle single command (existing logic)
+      const result = await processCommand(parsed, req.user.userId);
+      responseData = { ...responseData, ...result };
+    }
+
+    res.json(responseData);
+  } catch (error) {
+    console.error('Voice processing error:', error);
+    res.status(500).json({ 
+      error: error.message,
+      response: "Sorry, I couldn't process that command. Please try again."
+    });
+  }
+});
+
+// Extract command processing logic into a separate function
+async function processCommand(parsed, userId) {
+  let responseData = {};
+
+  switch (parsed.action) {
+    case 'create':
+      // Parse times to IST
+      const taskData = { ...parsed.task, userId: userId };
+      
+      if (taskData.dueDate) {
+        taskData.dueDate = parseTimeToIST(taskData.dueDate);
+      }
+      if (taskData.reminderTime) {
+        taskData.reminderTime = parseTimeToIST(taskData.reminderTime);
+      }
+      
+      const newTask = new Task(taskData);
+      await newTask.save();
+      responseData.taskCreated = newTask;
+      break;
+
+    case 'saveLink':
         if (!parsed.link?.url) {
           throw new Error('URL is required to save a link');
         }
@@ -342,7 +408,7 @@ Return format:
   "tags": ["tag1", "tag2"] (max 2 relevant tags, lowercase, most important only)
 }`;
 
-          const categoryResponse = await callGeminiWithFailover(req.user.userId, categoryPrompt);
+          const categoryResponse = await callGeminiWithFailover(userId, categoryPrompt);
           
           const responseText = categoryResponse.trim();
           // Remove markdown code blocks if present
@@ -355,7 +421,7 @@ Return format:
         }
         
         const newLink = new Link({
-          userId: req.user.userId,
+          userId: userId,
           url: parsed.link.url,
           title,
           description,
@@ -373,7 +439,7 @@ Return format:
         break;
 
       case 'list':
-        const tasks = await Task.find({ userId: req.user.userId, completed: false });
+        const tasks = await Task.find({ userId: userId, completed: false });
         responseData.tasks = tasks;
         if (tasks.length === 0) {
           responseData.response = "You have no pending tasks.";
@@ -383,7 +449,7 @@ Return format:
         break;
 
       case 'listAll':
-        const allUserTasks = await Task.find({ userId: req.user.userId }).sort({ createdAt: -1 });
+        const allUserTasks = await Task.find({ userId: userId }).sort({ createdAt: -1 });
         const pendingTasks = allUserTasks.filter(t => !t.completed);
         const completedTasks = allUserTasks.filter(t => t.completed);
         
@@ -432,7 +498,7 @@ Return format:
         if (!taskToUpdateId && parsed.task?.title) {
           const taskToUpdate = await Task.findOne({ 
             title: { $regex: new RegExp(parsed.task.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') },
-            userId: req.user.userId 
+            userId: userId 
           });
           if (!taskToUpdate) {
             throw new Error(`Task "${parsed.task.title}" not found`);
@@ -463,7 +529,7 @@ Return format:
         }
 
         const updatedTask = await Task.findOneAndUpdate(
-          { _id: taskToUpdateId, userId: req.user.userId },
+          { _id: taskToUpdateId, userId: userId },
           updateData,
           { new: true }
         );
@@ -500,7 +566,7 @@ Return format:
         if (!taskToCompleteId && parsed.task?.title) {
           const taskToComplete = await Task.findOne({ 
             title: { $regex: new RegExp(parsed.task.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') },
-            userId: req.user.userId 
+            userId: userId 
           });
           if (!taskToComplete) {
             throw new Error(`Task "${parsed.task.title}" not found`);
@@ -513,7 +579,7 @@ Return format:
         }
 
         const completedTask = await Task.findOneAndUpdate(
-          { _id: taskToCompleteId, userId: req.user.userId },
+          { _id: taskToCompleteId, userId: userId },
           { completed: true, updatedAt: new Date() },
           { new: true }
         );
@@ -536,7 +602,7 @@ Return format:
           // Search for matching tasks
           const matchingTasks = await Task.find({ 
             title: { $regex: new RegExp(parsed.task.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') },
-            userId: req.user.userId 
+            userId: userId 
           });
           
           if (matchingTasks.length === 0) {
@@ -558,7 +624,7 @@ Return format:
             taskToDeleteId = taskToDelete._id;
           }
         } else if (taskToDeleteId) {
-          taskToDelete = await Task.findOne({ _id: taskToDeleteId, userId: req.user.userId });
+          taskToDelete = await Task.findOne({ _id: taskToDeleteId, userId: userId });
         }
 
         if (!taskToDelete) {
@@ -566,7 +632,7 @@ Return format:
         }
 
         // Ask for confirmation before deleting
-        pendingConfirmations.set(req.user.userId, {
+        pendingConfirmations.set(userId, {
           action: 'delete',
           taskId: taskToDelete._id,
           taskTitle: taskToDelete.title,
@@ -584,14 +650,14 @@ Return format:
 
       case 'deleteAll':
         // Ask for confirmation before deleting all tasks
-        const taskCount = await Task.countDocuments({ userId: req.user.userId });
+        const taskCount = await Task.countDocuments({ userId: userId });
         
         if (taskCount === 0) {
           responseData.response = "No tasks found to delete.";
           break;
         }
         
-        pendingConfirmations.set(req.user.userId, {
+        pendingConfirmations.set(userId, {
           action: 'deleteAll',
           taskCount: taskCount,
           timestamp: Date.now()
@@ -624,7 +690,7 @@ Return format:
           };
         }
         
-        const matchingLinks = await Link.find({ ...linkQuery, userId: req.user.userId });
+        const matchingLinks = await Link.find({ ...linkQuery, userId: userId });
         
         if (matchingLinks.length === 0) {
           responseData.response = `No links found matching "${parsed.searchQuery || parsed.link.url}".`;
@@ -645,7 +711,7 @@ Return format:
           // Single match - ask for confirmation
           const linkToDelete = matchingLinks[0];
           
-          pendingConfirmations.set(req.user.userId, {
+          pendingConfirmations.set(userId, {
             action: 'deleteLink',
             linkId: linkToDelete._id,
             linkTitle: linkToDelete.title,
@@ -665,7 +731,7 @@ Return format:
 
         // Enhanced search with partial matching
         const searchResults = await Link.find({
-          userId: req.user.userId,
+          userId: userId,
           $or: [
             { title: { $regex: searchQuery, $options: 'i' } },
             { description: { $regex: searchQuery, $options: 'i' } },
@@ -692,7 +758,7 @@ Return format:
 
       case 'confirmDelete':
         // User confirmed deletion - check if there's a pending confirmation
-        const pendingDelete = pendingConfirmations.get(req.user.userId);
+        const pendingDelete = pendingConfirmations.get(userId);
         
         if (!pendingDelete || pendingDelete.action !== 'delete') {
           responseData.response = "I don't have any pending delete confirmation. Please specify which task you want to delete.";
@@ -701,7 +767,7 @@ Return format:
         
         const deletedTask = await Task.findOneAndDelete({ 
           _id: pendingDelete.taskId, 
-          userId: req.user.userId 
+          userId: userId 
         });
 
         if (!deletedTask) {
@@ -712,19 +778,19 @@ Return format:
         }
         
         // Clear the pending confirmation
-        pendingConfirmations.delete(req.user.userId);
+        pendingConfirmations.delete(userId);
         break;
 
       case 'confirmDeleteAll':
         // User confirmed delete all - check if there's a pending confirmation
-        const pendingDeleteAll = pendingConfirmations.get(req.user.userId);
+        const pendingDeleteAll = pendingConfirmations.get(userId);
         
         if (!pendingDeleteAll || pendingDeleteAll.action !== 'deleteAll') {
           responseData.response = "I don't have any pending delete all confirmation. Please say 'delete all tasks' first.";
           break;
         }
         
-        const deleteResult = await Task.deleteMany({ userId: req.user.userId });
+        const deleteResult = await Task.deleteMany({ userId: userId });
         
         responseData.deletedCount = deleteResult.deletedCount;
         if (deleteResult.deletedCount === 0) {
@@ -734,12 +800,12 @@ Return format:
         }
         
         // Clear the pending confirmation
-        pendingConfirmations.delete(req.user.userId);
+        pendingConfirmations.delete(userId);
         break;
 
       case 'confirmDeleteLink':
         // User confirmed link deletion
-        const pendingDeleteLink = pendingConfirmations.get(req.user.userId);
+        const pendingDeleteLink = pendingConfirmations.get(userId);
         
         if (!pendingDeleteLink || pendingDeleteLink.action !== 'deleteLink') {
           responseData.response = "I don't have any pending link delete confirmation. Please specify which link you want to delete.";
@@ -748,7 +814,7 @@ Return format:
         
         const deletedLink = await Link.findOneAndDelete({ 
           _id: pendingDeleteLink.linkId, 
-          userId: req.user.userId 
+          userId: userId 
         });
 
         if (!deletedLink) {
@@ -759,12 +825,12 @@ Return format:
         }
         
         // Clear the pending confirmation
-        pendingConfirmations.delete(req.user.userId);
+        pendingConfirmations.delete(userId);
         break;
 
       case 'sendEmail':
         // Get user to access their API key and email
-        const user = await User.findById(req.user.userId);
+        const user = await User.findById(userId);
         if (!user) {
           throw new Error('User not found');
         }
@@ -776,7 +842,7 @@ Return format:
         }
 
         const resend = new Resend(resendApiKey);
-        const userTasks = await Task.find({ userId: req.user.userId });
+        const userTasks = await Task.find({ userId: userId });
         const emailPendingTasks = userTasks.filter(t => !t.completed);
         const emailCompletedTasks = userTasks.filter(t => t.completed);
 
@@ -849,15 +915,12 @@ Return format:
           throw new Error('Failed to send email. Please check RESEND_API_KEY configuration.');
         }
         break;
+
+      default:
+        throw new Error(`Unknown action: ${parsed.action}`);
     }
 
-    res.json(responseData);
-  } catch (error) {
-    res.status(500).json({ 
-      error: error.message, 
-      response: "Sorry, I couldn't process that command."
-    });
-  }
-});
+    return responseData;
+}
 
 export default router;

@@ -338,7 +338,16 @@ export default function TaskList() {
             tabIndex={-1}
           >
             <div className="border-b border-zinc-800 pb-3 mb-4">
-              <p className="text-[10px] text-gray-500 tracking-wider">&gt; CONFIRM_DELETE</p>
+              <p className="text-[10px] text-gray-500 tracking-wider">
+                {deleteConfirmation.type === 'single' 
+                  ? '> CONFIRM_DELETE'
+                  : deleteConfirmation.type === 'all'
+                  ? '> CONFIRM_DELETE_ALL'
+                  : deleteConfirmation.type === 'toggleAll'
+                  ? allTasksCompleted ? '> CONFIRM_MARK_ALL_UNDONE' : '> CONFIRM_MARK_ALL_DONE'
+                  : '> CONFIRM_ACTION'
+                }
+              </p>
             </div>
             
             <div className="mb-6">
