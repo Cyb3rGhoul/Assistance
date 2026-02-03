@@ -307,7 +307,7 @@ Examples:
 
       for (const command of parsed.commands) {
         try {
-          const result = await processCommand(command, req.user.userId);
+          const result = await processCommand(command, req.user.userId, true); // Pass true for multi-command
           results.push(result);
           if (result.response) {
             overallResponse.push(result.response);
@@ -340,7 +340,7 @@ Examples:
 });
 
 // Extract command processing logic into a separate function
-async function processCommand(parsed, userId) {
+async function processCommand(parsed, userId, isMultiCommand = false) {
   let responseData = {};
 
   switch (parsed.action) {
@@ -631,21 +631,38 @@ Return format:
           throw new Error('Task not found or you do not have permission to delete it');
         }
 
-        // Ask for confirmation before deleting
-        pendingConfirmations.set(userId, {
-          action: 'delete',
-          taskId: taskToDelete._id,
-          taskTitle: taskToDelete.title,
-          timestamp: Date.now()
-        });
-        
-        responseData.confirmAction = 'delete';
-        responseData.confirmTarget = {
-          id: taskToDelete._id,
-          title: taskToDelete.title,
-          description: taskToDelete.description
-        };
-        responseData.response = `Are you sure you want to delete the task "${taskToDelete.title}"? Say "yes" or "delete it" to confirm.`;
+        // In multi-command scenarios, delete immediately without confirmation
+        // In single command scenarios, ask for confirmation
+        if (isMultiCommand) {
+          // Delete immediately in multi-command
+          const deletedTask = await Task.findOneAndDelete({ 
+            _id: taskToDelete._id, 
+            userId: userId 
+          });
+
+          if (deletedTask) {
+            responseData.taskDeleted = deletedTask;
+            responseData.response = `Deleted task: "${deletedTask.title}"`;
+          } else {
+            responseData.response = "Task not found or already deleted.";
+          }
+        } else {
+          // Ask for confirmation in single command
+          pendingConfirmations.set(userId, {
+            action: 'delete',
+            taskId: taskToDelete._id,
+            taskTitle: taskToDelete.title,
+            timestamp: Date.now()
+          });
+          
+          responseData.confirmAction = 'delete';
+          responseData.confirmTarget = {
+            id: taskToDelete._id,
+            title: taskToDelete.title,
+            description: taskToDelete.description
+          };
+          responseData.response = `Are you sure you want to delete the task "${taskToDelete.title}"? Say "yes" or "delete it" to confirm.`;
+        }
         break;
 
       case 'deleteAll':
